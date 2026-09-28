@@ -106,14 +106,8 @@ const sendData = async (req, res) => {
     const simStatus = getSimulationStatus();
 
     if (simStatus.batterySource === "SIMULATION") {
-      // In SIMULATION mode: guard physical hardware relays from simulation decisions
-      currentLoads = {
-        load1: typeof load1 === "boolean" ? load1 : true,
-        load2: typeof load2 === "boolean" ? load2 : true,
-        supply: typeof suppVal === "boolean" ? suppVal : true,
-        battSupply: typeof req.body.battSupply === "boolean" ? req.body.battSupply : true,
-        charger: typeof req.body.charger === "boolean" ? req.body.charger : true
-      };
+      // In SIMULATION mode: dispatch simulation load decisions directly to physical ESP32 hardware relays
+      currentLoads = getLoads();
     } else if (appCommandRecent) {
       // User clicked a control button on the website/app recently. Preserve target loads so ESP32 executes it!
       currentLoads = getLoads();
