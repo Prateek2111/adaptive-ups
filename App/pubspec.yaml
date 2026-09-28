@@ -1,0 +1,47 @@
+name: adaptive_ups_flutter
+description: "Adaptive UPS dashboard Flutter app."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.5.0
+  shared_preferences: ^2.5.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_native_splash: ^2.4.0
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/logo.jpeg
+    - assets/icon/splashScreen.png
+    - assets/icon/splash.png
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/icon/logo.jpeg
+
+  android: true
+  ios: true
+
+  android_12:
+    image: assets/icon/logo.jpeg
+    icon_background_color: "#ffffff"
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/logo.jpeg
+  remove_alpha_ios: true
