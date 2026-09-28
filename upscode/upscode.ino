@@ -11,7 +11,7 @@
 const char* ssid = "Prateek";
 const char* password = "Prateek123";
 
-const char* serverName = "https://final-ups-code-final.onrender.com/send-data";
+const char* serverName = "https://adaptive-ups-v81g.onrender.com/send-data";
 
 // Sensor Pin Configuration
 #define ONE_WIRE_BUS 4       // DS18B20 Temp Sensor

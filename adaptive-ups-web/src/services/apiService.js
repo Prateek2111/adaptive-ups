@@ -4,7 +4,7 @@ function parseNum(val, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-const PRIMARY_API = 'https://final-ups-code-final.onrender.com';
+const PRIMARY_API = 'https://adaptive-ups-v81g.onrender.com';
 const FALLBACK_API = 'http://localhost:5000';
 
 class ApiService {
@@ -198,10 +198,42 @@ class ApiService {
     return res.status;
   }
 
-  async updateLoadPriority(id, { priority, powerRating, name }) {
+  async setTempSpeed(speed) {
+    const res = await this._request('/simulation/temp/speed', {
+      method: 'POST',
+      body: JSON.stringify({ speed }),
+    });
+    return res.status;
+  }
+
+  async setTempMode(mode, target = null) {
+    const res = await this._request('/simulation/temp/mode', {
+      method: 'POST',
+      body: JSON.stringify({ mode, target }),
+    });
+    return res.status;
+  }
+
+  async setTempProfile(profile) {
+    const res = await this._request('/simulation/temp/profile', {
+      method: 'POST',
+      body: JSON.stringify({ profile }),
+    });
+    return res.status;
+  }
+
+  async triggerScenario(scenario) {
+    const res = await this._request('/simulation/scenario', {
+      method: 'POST',
+      body: JSON.stringify({ scenario }),
+    });
+    return res.status;
+  }
+
+  async updateLoadPriority(id, { priority, powerRating, name, thermalSensitivity }) {
     return await this._request(`/loads/${id}/priority`, {
       method: 'PUT',
-      body: JSON.stringify({ priority, powerRating, name }),
+      body: JSON.stringify({ priority, powerRating, name, thermalSensitivity }),
     });
   }
 }

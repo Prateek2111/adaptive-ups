@@ -9,6 +9,15 @@ router.post("/simulation/stop", simulationController.stopSimulation);
 router.post("/simulation/reset", simulationController.resetSimulation);
 router.post("/simulation/source", simulationController.setBatterySource);
 router.post("/simulation/speed", simulationController.setSpeed);
+
+// Temperature simulation routes
+router.post("/simulation/temp/speed", simulationController.setTempSpeed);
+router.post("/simulation/temp/mode", simulationController.setTempMode);
+router.post("/simulation/temp/profile", simulationController.setTempProfile);
+
+// Scenario routes
+router.post("/simulation/scenario", simulationController.triggerScenario);
+
 router.get("/simulation/status", simulationController.getStatus);
 router.post("/simulation/config", simulationController.updateConfig);
 
