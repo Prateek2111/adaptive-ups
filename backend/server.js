@@ -16,6 +16,7 @@ app.use('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
+// hello world route
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend running on http://localhost:${PORT}`);
