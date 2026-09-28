@@ -576,8 +576,29 @@ function getSimulationStatus() {
   const activeLoadsCount = loadConfigurations.filter(l => l.state).length;
   const shedLoadsCount = loadConfigurations.filter(l => !l.state).length;
 
+  let ina226Data = {
+    ina226BusVoltage: Number(simulationState.voltage.toFixed(2)),
+    ina226ShuntVoltage: Number((simulationState.current * 0.010 * 1000).toFixed(2)),
+    ina226Current: Number(simulationState.current.toFixed(2)),
+    ina226Power: Number(simulationState.power.toFixed(1)),
+    ina226Online: true
+  };
+
+  if (simulationState.batterySource === "REAL") {
+    const { getLatestSensorData } = require("./fallbackService");
+    const realSensors = getLatestSensorData();
+    ina226Data = {
+      ina226BusVoltage: Number((realSensors.ina226BusVoltage || realSensors.dcVoltage || 0).toFixed(2)),
+      ina226ShuntVoltage: Number((realSensors.ina226ShuntVoltage || 0).toFixed(2)),
+      ina226Current: Number((realSensors.ina226Current || realSensors.dcCurrent || 0).toFixed(2)),
+      ina226Power: Number((realSensors.ina226Power || 0).toFixed(1)),
+      ina226Online: Boolean(realSensors.ina226Online)
+    };
+  }
+
   return {
     ...simulationState,
+    ...ina226Data,
     activePower,
     activeLoadsCount,
     shedLoadsCount,

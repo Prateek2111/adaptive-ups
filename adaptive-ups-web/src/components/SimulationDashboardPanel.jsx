@@ -446,6 +446,26 @@ export default function SimulationDashboardPanel({ addLog }) {
           </div>
         </div>
 
+        {/* INA226 Precision Telemetry Strip */}
+        <div className="p-3 rounded-xl bg-[var(--bg-main)] border border-blue-500/20 mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-[var(--text-main)]">
+              🎛️ INA226 Sensor Readout:
+            </span>
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+              sim.ina226Online ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'
+            }`}>
+              {sim.ina226Online ? '● ONLINE' : '⚠️ ANALOG FALLBACK'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs font-mono text-[var(--text-muted)]">
+            <span>Bus: <strong className="text-emerald-400">{(sim.ina226BusVoltage || sim.voltage || 0).toFixed(2)}V</strong></span>
+            <span>Shunt: <strong className="text-blue-400">{(sim.ina226ShuntVoltage || 0).toFixed(2)}mV</strong></span>
+            <span>Current: <strong className="text-amber-400">{(sim.ina226Current || sim.current || 0).toFixed(2)}A</strong></span>
+            <span>Power: <strong className="text-purple-400">{(sim.ina226Power || sim.power || 0).toFixed(1)}W</strong></span>
+          </div>
+        </div>
+
         {/* Battery Speed Selector */}
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">

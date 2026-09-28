@@ -69,6 +69,11 @@ export default function App() {
   const [systemCurrent, setSystemCurrent] = useState(0.45);
   const [systemCurrent1, setSystemCurrent1] = useState(0.25);
   const [systemCurrent2, setSystemCurrent2] = useState(0.20);
+  const [ina226BusVoltage, setIna226BusVoltage] = useState(12.6);
+  const [ina226ShuntVoltage, setIna226ShuntVoltage] = useState(0.0);
+  const [ina226Current, setIna226Current] = useState(0.0);
+  const [ina226Power, setIna226Power] = useState(0.0);
+  const [ina226Online, setIna226Online] = useState(false);
 
   const [lowThresh, setLowThresh] = useState(20);
   const [critThresh, setCritThresh] = useState(10);
@@ -152,6 +157,11 @@ export default function App() {
       setSystemCurrent(sensor.current);
       setSystemCurrent1(sensor.current1 || 0);
       setSystemCurrent2(sensor.current2 || 0);
+      setIna226BusVoltage(sensor.ina226BusVoltage !== undefined ? sensor.ina226BusVoltage : calculatedDcV);
+      setIna226ShuntVoltage(sensor.ina226ShuntVoltage || 0.0);
+      setIna226Current(sensor.ina226Current !== undefined ? sensor.ina226Current : dynamicDcCurrent);
+      setIna226Power(sensor.ina226Power || 0.0);
+      setIna226Online(sensor.ina226Online === true);
       setBattPct(sensor.battery);
 
       setLowThresh(settings.lowBatteryThreshold);
@@ -512,6 +522,11 @@ export default function App() {
             priority={priority}
             battSupplyOn={battSupplyOn}
             chargerOn={chargerOn}
+            ina226BusVoltage={ina226BusVoltage}
+            ina226ShuntVoltage={ina226ShuntVoltage}
+            ina226Current={ina226Current}
+            ina226Power={ina226Power}
+            ina226Online={ina226Online}
           />
         )}
 

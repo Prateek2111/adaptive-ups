@@ -7,11 +7,144 @@
 #include <ArduinoOTA.h>
 #include <WebServer.h>
 #include <Update.h>
+#include <Wire.h>
 
 const char* ssid = "Prateek";
 const char* password = "Prateek123";
 
-const char* serverName = "https://final-ups-code-final.onrender.com/send-data";
+const char* serverName = "https://adaptive-ups-v81g.onrender.com/send-data";
+
+// INA226 Hardware Configuration
+#define INA226_SDA_PIN 21
+#define INA226_SCL_PIN 22
+#define INA226_DEFAULT_ADDR 0x40
+#define SHUNT_RESISTANCE_OHMS 0.010  // 0.010 Ohm High-Side Shunt Resistor
+#define MAX_CURRENT_AMPS 15.0       // Maximum Expected Current 15A
+
+struct INA226Data {
+  float busVoltage;   // V
+  float shuntVoltage; // mV
+  float current;      // A
+  float power;        // W
+  bool valid;
+};
+
+class INA226Driver {
+private:
+  uint8_t _addr;
+  float _shuntOhms;
+  float _maxCurrent;
+  float _currentLSB;
+  float _powerLSB;
+  uint16_t _calValue;
+  bool _connected;
+
+  uint16_t readRegister(uint8_t reg) {
+    Wire.beginTransmission(_addr);
+    Wire.write(reg);
+    if (Wire.endTransmission() != 0) return 0;
+    Wire.requestFrom(_addr, (uint8_t)2);
+    if (Wire.available() < 2) return 0;
+    uint16_t val = (Wire.read() << 8) | Wire.read();
+    return val;
+  }
+
+  void writeRegister(uint8_t reg, uint16_t value) {
+    Wire.beginTransmission(_addr);
+    Wire.write(reg);
+    Wire.write((value >> 8) & 0xFF);
+    Wire.write(value & 0xFF);
+    Wire.endTransmission();
+  }
+
+public:
+  INA226Driver(uint8_t addr = INA226_DEFAULT_ADDR, float shuntOhms = SHUNT_RESISTANCE_OHMS, float maxCurrent = MAX_CURRENT_AMPS)
+    : _addr(addr), _shuntOhms(shuntOhms), _maxCurrent(maxCurrent), _connected(false) {}
+
+  bool begin(int sdaPin = INA226_SDA_PIN, int sclPin = INA226_SCL_PIN) {
+    Wire.begin(sdaPin, sclPin);
+    
+    // Auto-scan for INA226 at common I2C addresses (0x40 - 0x45)
+    uint8_t addrsToScan[] = { _addr, 0x40, 0x41, 0x44, 0x45 };
+    bool found = false;
+    for (int i = 0; i < 5; i++) {
+      uint8_t testAddr = addrsToScan[i];
+      Wire.beginTransmission(testAddr);
+      if (Wire.endTransmission() == 0) {
+        _addr = testAddr;
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      _connected = false;
+      return false;
+    }
+
+    _currentLSB = _maxCurrent / 32768.0;
+    _powerLSB = 25.0 * _currentLSB;
+    _calValue = (uint16_t)(0.00512 / (_currentLSB * _shuntOhms));
+
+    // Configure INA226: 16x averaging, 1.1ms conversion time, continuous mode
+    writeRegister(0x00, 0x4127);
+    writeRegister(0x05, _calValue);
+
+    _connected = true;
+    return true;
+  }
+
+  bool isConnected() { return _connected; }
+  uint8_t getAddress() { return _addr; }
+  float getShuntOhms() { return _shuntOhms; }
+
+  float getBusVoltage() {
+    if (!_connected) return 0.0;
+    int16_t val = (int16_t)readRegister(0x02);
+    return val * 0.00125;
+  }
+
+  float getShuntVoltage() {
+    if (!_connected) return 0.0;
+    int16_t val = (int16_t)readRegister(0x01);
+    return val * 0.0025;
+  }
+
+  float getCurrent() {
+    if (!_connected) return 0.0;
+    int16_t val = (int16_t)readRegister(0x04);
+    float currentA = val * _currentLSB;
+    if (abs(currentA) < 0.005) return 0.0;
+    return currentA;
+  }
+
+  float getPower() {
+    if (!_connected) return 0.0;
+    uint16_t val = readRegister(0x03);
+    return val * _powerLSB;
+  }
+
+  INA226Data read() {
+    INA226Data data;
+    if (!_connected) {
+      data.busVoltage = 0.0;
+      data.shuntVoltage = 0.0;
+      data.current = 0.0;
+      data.power = 0.0;
+      data.valid = false;
+      return data;
+    }
+
+    data.busVoltage = getBusVoltage();
+    data.shuntVoltage = getShuntVoltage();
+    data.current = getCurrent();
+    data.power = getPower();
+    data.valid = (data.busVoltage > 0.5);
+    return data;
+  }
+};
+
+INA226Driver ina226(INA226_DEFAULT_ADDR, SHUNT_RESISTANCE_OHMS, MAX_CURRENT_AMPS);
 
 // Sensor Pin Configuration
 #define ONE_WIRE_BUS 4       // DS18B20 Temp Sensor
@@ -26,7 +159,7 @@ const char* serverName = "https://final-ups-code-final.onrender.com/send-data";
 #define RELAY_LOAD1       5    // Relay 2 - Load 1 / Inverter Cutoff Relay (GPIO 5)
 #define RELAY_LOAD2       15   // Relay 3 - Load 2 Output Relay (GPIO 15)
 #define RELAY_BATT_SUPPLY 19   // Relay 4 - Battery-to-Inverter DC Supply Relay (GPIO 19)
-#define RELAY_CHARGER     21   // Relay 5 - Battery Charger Control Relay (GPIO 21)
+#define RELAY_CHARGER     27   // Relay 5 - Battery Charger Control Relay (GPIO 21)
 
 float adc_voltage = 0.0;
 float in_voltage = 0.0;  // Battery DC Voltage
@@ -129,6 +262,7 @@ const char* otaWebPage =
 "<button class='btn' onclick='toggleRelay(\"charger\")'>⚡ Toggle Battery Charger (Relay 5 / GPIO 21)</button>"
 "<button class='btn btn-secondary' onclick='toggleTest()'>🔄 Hardware Auto-Blink Test Mode</button>"
 "<button class='btn btn-secondary' onclick='invertPolarity()'>⚡ Invert Relay Polarity (Low ↔ High)</button>"
+"<button class='btn btn-secondary' onclick='calibrateACS()'>🎯 Calibrate ACS712 Zero Offset</button>"
 "<button class='btn btn-danger' onclick='rebootESP()'>🔄 Remote Reboot ESP32</button>"
 "<button class='btn btn-secondary' onclick='clearLogs()'>🧹 Clear Terminal Logs</button>"
 "</div>"
@@ -154,6 +288,7 @@ const char* otaWebPage =
 "function rebootESP(){ if(confirm('Reboot ESP32?')){ $.get('/reboot', function(d){ alert(d); }); } }"
 "function toggleRelay(id){ var ep = (id === 'supply' || id === 'source') ? '/toggle-web/source' : (id === 'battSupply' || id === 4 || id === '4') ? '/toggle-web/battSupply' : (id === 'charger' || id === 5 || id === '5') ? '/toggle-web/charger' : '/toggle-web/load' + id; $.get(ep, function(d){ alert(d); fetchLogs(); }); }"
 "function invertPolarity(){ $.get('/invert-relay', function(d){ alert(d); fetchLogs(); }); }"
+"function calibrateACS(){ $.get('/calibrate-acs', function(d){ alert(d); fetchLogs(); }); }"
 "function toggleTest(){ $.get('/test/toggle', function(d){ alert(d); fetchLogs(); }); }"
 "$('form').submit(function(e){"
 "e.preventDefault();"
@@ -189,6 +324,37 @@ float jct5052c_calibration = 1.100999;
 // ACS712-20A = 0.100 V/A (100 mV/A) <- Default
 // ACS712-30A = 0.066 V/A (66 mV/A)
 float acs712_dc_sensitivity = 0.100;
+
+// ACS712 Real-Time Diagnostic & Auto-Calibration State
+int lastAcsRawAdc = 0;
+float lastAcsVoltage = 0.0;
+float acs712_zero_offset = 2.50; // Default 2.50V resting baseline for 5V ACS712 (or 1.65V for 3.3V)
+bool acs712_calibrated = false;
+
+// Auto-calibrates the ACS712 resting zero-point voltage across 200 samples
+void calibrateACS712() {
+  long sum = 0;
+  const int calSamples = 200;
+  for (int i = 0; i < calSamples; i++) {
+    sum += analogRead(ACS712_PIN);
+    delayMicroseconds(200);
+  }
+  float calAdc = (float)sum / calSamples;
+  lastAcsRawAdc = (int)calAdc;
+
+  // If ADC reading is within valid sensor resting window (>= 1200 counts)
+  if (calAdc >= 1200) {
+    acs712_zero_offset = (calAdc * 3.3) / 4095.0;
+    acs712_calibrated = true;
+    lastAcsVoltage = acs712_zero_offset;
+    webLog("⚡ [ACS712 CALIBRATION] Zero-offset auto-calibrated: " + String(acs712_zero_offset, 3) + " V (Raw ADC: " + String(calAdc, 0) + ")");
+  } else {
+    acs712_zero_offset = 2.50;
+    acs712_calibrated = false;
+    lastAcsVoltage = 2.50;
+    webLog("⚠️ [ACS712 WARNING] Raw ADC (" + String(calAdc, 0) + ") is near 0/disconnected. Using 2.50V baseline.");
+  }
+}
 
 // Function to measure True RMS AC Current from JCT5052C sensor module (GPIO 32 / GPIO 33)
 float readACCurrentJCT5052C(int pin) {
@@ -255,22 +421,31 @@ float readACCurrentJCT5052C(int pin) {
 // Function to measure DC Battery Voltage from 0-25V DC Voltage Sensor Module (GPIO 34)
 float readDCVoltageSensor() {
   long sum = 0;
-  const int numSamples = 30;
+  const int numSamples = 50;
   for (int i = 0; i < numSamples; i++) {
     sum += analogRead(BATTERY_PIN);
     delayMicroseconds(100);
   }
-  float avgAdc = (float)sum / numSamples;
+  float adc_value = (float)sum / numSamples;
 
-  // Unpopulated / Disconnected threshold cutoff (< 0.2V measured)
-  if (avgAdc < 100.0) {
-    return 12.6; // Default fallback to 12.6V if sensor is disconnected
+  // Unpopulated / Disconnected threshold (if no voltage/pin floating)
+  if (adc_value < 50.0) {
+    return 12.6; // Default 12.6V fallback if disconnected
   }
 
-  // 0-25V Voltage Sensor Module (5:1 voltage divider: R1=30k, R2=7.5k -> (30+7.5)/7.5 = 5.0)
-  float vAdc = (avgAdc * 3.3) / 4095.0;
-  float measuredDC = vAdc * 5.0 * 1.05; // 1.05 scaling factor for ESP32 ADC attenuation
-  return measuredDC;
+  // Exact esp32io.com formula for 0-25V Voltage Sensor Module:
+  float voltage_adc = (adc_value * ref_voltage) / 4096.0;
+  float voltage_in = voltage_adc * (R1 + R2) / R2;
+
+  // Exponential Moving Average (EMA) Filter to prevent LCD/Web flickering
+  static float smoothedDC = 0.0;
+  if (smoothedDC == 0.0) {
+    smoothedDC = voltage_in;
+  } else {
+    smoothedDC = (smoothedDC * 0.80) + (voltage_in * 0.20);
+  }
+
+  return smoothedDC;
 }
 
 // Function to measure Real-Time Dynamic DC Current directly from ACS712 Sensor (GPIO 36 / VP)
@@ -278,7 +453,7 @@ float readDCCurrentACS712(int pin) {
   long sum = 0;
   int currentMax = 0;
   int currentMin = 4095;
-  const int numSamples = 100;
+  const int numSamples = 100; // 100 samples for clean, accurate ADC averaging
   for (int i = 0; i < numSamples; i++) {
     int val = analogRead(pin);
     if (val > currentMax) currentMax = val;
@@ -288,19 +463,30 @@ float readDCCurrentACS712(int pin) {
   }
   float avgAdc = (float)sum / numSamples;
   float vSense = (avgAdc * 3.3) / 4095.0;
+  lastAcsRawAdc = (int)avgAdc;
+  lastAcsVoltage = vSense;
+  lastAcsP2p = currentMax - currentMin;
 
-  // Auto zero baseline detection (2.50V for 5V ACS712, 1.65V for 3.3V)
-  float zeroOffset = 2.50;
-  if (avgAdc >= 1400 && avgAdc < 2600) {
-    zeroOffset = 1.65;
+  // Quiescent zero offset detection if not calibrated
+  if (!acs712_calibrated) {
+    if (avgAdc >= 2600) {
+      acs712_zero_offset = 2.50; // Standard 5V VCC ACS712 (quiescent ~2.5V)
+    } else if (avgAdc >= 1400 && avgAdc < 2600) {
+      acs712_zero_offset = 1.65; // Standard 3.3V VCC ACS712 (quiescent ~1.65V)
+    } else {
+      acs712_zero_offset = 2.50;
+    }
   }
 
-  float dynamicCurrent = abs(vSense - zeroOffset) / acs712_dc_sensitivity;
+  // Calculate real-time dynamic current directly from physical sensor voltage
+  float dynamicCurrent = abs(vSense - acs712_zero_offset) / acs712_dc_sensitivity;
+
+  // Cutoff idle noise floor below 0.05 A
   if (dynamicCurrent < 0.05) {
     dynamicCurrent = 0.0;
   }
 
-  // Smooth real-time fluctuations
+  // Smooth real-time fluctuations with responsive Exponential Moving Average
   static float smoothedDCCurrent = 0.0;
   if (smoothedDCCurrent == 0.0) {
     smoothedDCCurrent = dynamicCurrent;
@@ -406,6 +592,7 @@ void printSerialHelp() {
   Serial.println("  • '5' or 'charger'         : Toggle Battery Charger Relay (GPIO 21)");
   Serial.println("  • 'charger on' / 'off'     : Set Battery Charger ON / OFF");
   Serial.println("  • 'all on' / 'all off'     : Turn ALL 5 Relays ON / OFF");
+  Serial.println("  • 'cal' or 'calibrate'     : Auto-calibrate ACS712 zero-current baseline");
   Serial.println("  • 'status'                 : View current states of all 5 relays");
   Serial.println("=======================================================================\n");
 }
@@ -548,6 +735,24 @@ void handleSerialInput() {
   else if (cmd == "help" || cmd == "?") {
     printSerialHelp();
   }
+  else if (cmd == "cal" || cmd == "calibrate" || cmd == "cal acs") {
+    calibrateACS712();
+    Serial.println("✅ ACS712 zero-offset calibrated to: " + String(acs712_zero_offset, 3) + " V");
+  }
+  else if (cmd == "ina" || cmd == "ina226" || cmd == "test ina" || cmd == "test ina226") {
+    INA226Data d = ina226.read();
+    Serial.println("\n=======================================================================");
+    Serial.println("  ⚡ INA226 HIGH-PRECISION I2C POWER SENSOR DIAGNOSTIC TEST");
+    Serial.println("=======================================================================");
+    Serial.printf("  • I2C Bus Address       : 0x%02X\n", ina226.getAddress());
+    Serial.printf("  • Sensor Status         : %s\n", ina226.isConnected() ? "OK / ONLINE" : "OFFLINE / UNREACHABLE");
+    Serial.printf("  • Shunt Resistance      : %.3f Ω\n", ina226.getShuntOhms());
+    Serial.printf("  • Bus Voltage           : %.2f V DC\n", d.busVoltage);
+    Serial.printf("  • Shunt Voltage         : %.3f mV\n", d.shuntVoltage);
+    Serial.printf("  • DC Current            : %.2f A DC\n", d.current);
+    Serial.printf("  • Power                 : %.2f W\n", d.power);
+    Serial.println("=======================================================================\n");
+  }
   else if (cmd == "status") {
     Serial.printf("\n📊 5-Relay Status: Mains [%s] | Load 1 [%s] | Load 2 [%s] | Batt DC [%s] | Charger [%s]\n",
                   sourceState ? "MAINS" : "INVERTER",
@@ -568,6 +773,19 @@ void handleSerialInput() {
 void setup() {
   Serial.begin(115200);
   Serial.setTimeout(100); // 100ms non-blocking serial timeout for instant command execution
+
+  // Initialize INA226 High-Precision I2C Sensor
+  Serial.println("[INA226] Initializing...");
+  if (ina226.begin(INA226_SDA_PIN, INA226_SCL_PIN)) {
+    Serial.printf("[INA226] Found at 0x%02X\n", ina226.getAddress());
+    Serial.printf("[INA226] Shunt: %.3f Ω\n", ina226.getShuntOhms());
+    INA226Data initData = ina226.read();
+    Serial.printf("[INA226] Bus Voltage: %.2f V\n", initData.busVoltage);
+    Serial.printf("[INA226] Current: %.2f A\n", initData.current);
+    Serial.printf("[INA226] Power: %.2f W\n", initData.power);
+  } else {
+    Serial.println("[INA226] Not detected");
+  }
 
   // Relay outputs
   pinMode(RELAY_SOURCE, OUTPUT);
@@ -810,6 +1028,12 @@ void setup() {
     webLog("Hardware Diagnostic Test Mode is now " + String(relayHardwareTest ? "ENABLED (Auto Blinking Relays)" : "DISABLED"));
     server.send(200, "text/plain", "Hardware Test Mode: " + String(relayHardwareTest ? "ENABLED (Auto Blinking)" : "DISABLED"));
   });
+
+  server.on("/calibrate-acs", HTTP_GET, []() {
+    calibrateACS712();
+    webLog("Web Calibration: ACS712 zero-offset set to " + String(acs712_zero_offset, 3) + " V");
+    server.send(200, "text/plain", "ACS712 calibrated! Zero Offset: " + String(acs712_zero_offset, 3) + " V (Raw ADC: " + String(lastAcsRawAdc) + ")");
+  });
   
   server.on("/update", HTTP_POST, []() {
     server.sendHeader("Connection", "close");
@@ -969,12 +1193,20 @@ void loop() {
       http.begin(client, serverName);
       http.addHeader("Content-Type", "application/json");
 
-      // Read DC Battery Voltage from 0-25V DC Voltage Sensor (GPIO 34)
-      in_voltage = readDCVoltageSensor();
-      float batteryPercentage = voltageToSOC(in_voltage);
+      // Read High-Precision INA226 Sensor Data (I2C 0x40)
+      INA226Data inaData = ina226.read();
+      float dcCurrent = 0.0;
 
-      // Read DC Current from ACS712 DC Current Sensor (GPIO 36)
-      float dcCurrent = readDCCurrentACS712(ACS712_PIN);
+      if (inaData.valid) {
+        in_voltage = inaData.busVoltage;
+        dcCurrent = abs(inaData.current);
+      } else {
+        // Fallback to analog DC voltage divider and ACS712 sensor
+        in_voltage = readDCVoltageSensor();
+        dcCurrent = readDCCurrentACS712(ACS712_PIN);
+      }
+
+      float batteryPercentage = voltageToSOC(in_voltage);
 
       // Read AC Current from Dual JCT5052C Sensors (GPIO 32 for Load 1, GPIO 33 for Load 2)
       float loadCurrent1 = readACCurrentJCT5052C(JCT5052C_PIN1);
@@ -1003,6 +1235,11 @@ void loop() {
       doc["current"] = totalLoadCurrent;
       doc["current1"] = loadCurrent1;
       doc["current2"] = loadCurrent2;
+      doc["ina226BusVoltage"] = inaData.busVoltage;
+      doc["ina226ShuntVoltage"] = inaData.shuntVoltage;
+      doc["ina226Current"] = inaData.current;
+      doc["ina226Power"] = inaData.power;
+      doc["ina226Online"] = ina226.isConnected();
       doc["source"] = sourceState ? "MAINS" : "INVERTER";
       doc["supply"] = sourceState;
       doc["load1"] = l1State;
@@ -1113,7 +1350,7 @@ void loop() {
         " [SENSORS]\n"
         "  • AC Input Voltage : %.1f V AC  (GPIO %d | ZMPT P2P Raw ADC: %d)\n"
         "  • DC Battery Volts : %.2f V     (GPIO 34 | SOC Battery: %.1f%%)\n"
-        "  • DC Battery Current: %.2f A DC (GPIO 36 | ACS712 DC Sensor)\n"
+        "  • DC Battery Current: %.2f A DC (GPIO %d | Raw ADC: %d | %.2fV | Offset: %.2fV)\n"
         "  • Load 1 AC Current: %.2f A RMS (GPIO 32 | JCT5052C Sensor 1)\n"
         "  • Load 2 AC Current: %.2f A RMS (GPIO 33 | JCT5052C Sensor 2)\n"
         "  • Total AC Current : %.2f A RMS (Power: %.1f W)\n"
@@ -1126,7 +1363,7 @@ void loop() {
         WiFi.localIP().toString().c_str(),
         acInputVoltage, detectedAcPin, lastZmptP2p,
         in_voltage, batteryPercentage,
-        dcCurrent,
+        dcCurrent, ACS712_PIN, lastAcsRawAdc, lastAcsVoltage, acs712_zero_offset,
         loadCurrent1, loadCurrent2, totalLoadCurrent, (acInputVoltage > 10 ? acInputVoltage : in_voltage) * totalLoadCurrent,
         temperature, humidity,
         httpResponseCode, (httpResponseCode > 0 ? "OK" : "FAILED"),

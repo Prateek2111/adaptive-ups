@@ -118,7 +118,12 @@ function setLatestSensorData(data) {
     dcCurrent: data.dcCurrent !== undefined ? Number(data.dcCurrent) : (latestSensorData.dcCurrent || 0),
     current: totalC,
     current1: c1,
-    current2: c2
+    current2: c2,
+    ina226BusVoltage: data.ina226BusVoltage !== undefined ? Number(data.ina226BusVoltage) : (latestSensorData.ina226BusVoltage || 0),
+    ina226ShuntVoltage: data.ina226ShuntVoltage !== undefined ? Number(data.ina226ShuntVoltage) : (latestSensorData.ina226ShuntVoltage || 0),
+    ina226Current: data.ina226Current !== undefined ? Number(data.ina226Current) : (latestSensorData.ina226Current || 0),
+    ina226Power: data.ina226Power !== undefined ? Number(data.ina226Power) : (latestSensorData.ina226Power || 0),
+    ina226Online: data.ina226Online !== undefined ? Boolean(data.ina226Online) : (latestSensorData.ina226Online || false)
   };
 
   return latestSensorData;

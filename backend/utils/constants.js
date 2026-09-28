@@ -6,7 +6,12 @@ const DEFAULT_SENSOR_DATA = {
   inputVoltage: 220,
   dcVoltage: 12.6,
   dcCurrent: 0,
-  current: 0
+  current: 0,
+  ina226BusVoltage: 0,
+  ina226ShuntVoltage: 0,
+  ina226Current: 0,
+  ina226Power: 0,
+  ina226Online: false
 };
 const DEFAULT_SETTINGS = {
   lowBatteryThreshold: 20,

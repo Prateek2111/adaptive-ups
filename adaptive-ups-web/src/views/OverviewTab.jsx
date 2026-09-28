@@ -20,6 +20,11 @@ export default function OverviewTab({
   priority,
   battSupplyOn = true,
   chargerOn = true,
+  ina226BusVoltage = 12.6,
+  ina226ShuntVoltage = 0,
+  ina226Current = 0,
+  ina226Power = 0,
+  ina226Online = false,
 }) {
   const pct = Math.min(100, Math.max(0, systemBattery));
   const isCritical = pct <= critThresh;
@@ -84,18 +89,24 @@ export default function OverviewTab({
         </div>
       )}
 
-      {/* Grid of Summary Cards - Displaying AC & DC Sensors prominently */}
+      {/* Grid of Summary Cards - Displaying INA226 & AC/DC Sensors prominently */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         <SummaryCard
-          label="DC Battery Voltage (0-25V Sensor)"
-          value={`${systemDcVoltage.toFixed(2)} V DC`}
+          label="INA226 Power Monitor"
+          value={`${ina226Power.toFixed(1)} W`}
+          subtitle={ina226Online ? `Bus: ${ina226BusVoltage.toFixed(2)}V • Current: ${ina226Current.toFixed(2)}A` : 'INA226 Disconnected (Using Analog Fallback)'}
+          subtitleColor={ina226Online ? '#10B981' : '#F59E0B'}
+        />
+        <SummaryCard
+          label="DC Battery Voltage (0-25V Sensor / INA226)"
+          value={`${(ina226Online ? ina226BusVoltage : systemDcVoltage).toFixed(2)} V DC`}
           subtitle={`Battery State of Charge: ${pct.toFixed(0)}%`}
           subtitleColor={systemDcVoltage < 10.5 ? '#EF4444' : '#10B981'}
         />
         <SummaryCard
-          label="DC Current (ACS712 Sensor)"
-          value={`${systemDcCurrent.toFixed(2)} A DC`}
-          subtitle="Battery DC Bus Current"
+          label="DC Current (INA226 / ACS712)"
+          value={`${(ina226Online ? ina226Current : systemDcCurrent).toFixed(2)} A DC`}
+          subtitle={ina226Online ? `Shunt: ${ina226ShuntVoltage.toFixed(2)} mV` : 'ACS712 Sensor Fallback'}
           subtitleColor="#F59E0B"
         />
         <SummaryCard
@@ -123,12 +134,6 @@ export default function OverviewTab({
           subtitleColor="#A78BFA"
         />
         <SummaryCard
-          label="Battery Status"
-          value={`${pct.toFixed(0)}%`}
-          subtitle={batteryStatusText}
-          subtitleColor={batteryStatusColor}
-        />
-        <SummaryCard
           label="System Temp"
           value={`${systemTemp.toFixed(1)} °C`}
           subtitle={tempLabel}
@@ -136,11 +141,92 @@ export default function OverviewTab({
         />
       </div>
 
+      {/* Dedicated INA226 High-Precision I2C Sensor Box */}
+      <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-base text-[var(--text-main)]">
+              🎛️ INA226 High-Precision I2C Current / Voltage / Power Sensor
+            </span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              I2C Address: 0x40 (GPIO 21/22)
+            </span>
+          </div>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+            ina226Online ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+          }`}>
+            {ina226Online ? '● INA226 ONLINE' : '⚠️ OFFLINE (Analog Fallback Active)'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)]">
+          <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-[var(--bg-card)] border border-emerald-500/30">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-emerald-400">Bus Voltage (V)</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-500/15 text-emerald-400">
+                0 - 36V DC
+              </span>
+            </div>
+            <span className="text-2xl font-black text-[var(--text-main)]">
+              {ina226BusVoltage.toFixed(2)} V
+            </span>
+            <span className="text-[11px] text-[var(--text-muted)] font-medium">
+              Battery High-Side Bus
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-[var(--bg-card)] border border-blue-500/30">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-blue-400">Shunt Voltage (mV)</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-500/15 text-blue-400">
+                0.010 Ω Shunt
+              </span>
+            </div>
+            <span className="text-2xl font-black text-[var(--text-main)]">
+              {ina226ShuntVoltage.toFixed(2)} mV
+            </span>
+            <span className="text-[11px] text-[var(--text-muted)] font-medium">
+              Shunt Voltage Drop
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-[var(--bg-card)] border border-amber-500/30">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-400">DC Current (A)</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/15 text-amber-400">
+                15A Max
+              </span>
+            </div>
+            <span className="text-2xl font-black text-[var(--text-main)]">
+              {ina226Current.toFixed(2)} A
+            </span>
+            <span className="text-[11px] text-[var(--text-muted)] font-medium">
+              16x Hardware Averaged
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-[var(--bg-card)] border border-purple-500/30">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-purple-400">Calculated Power (W)</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-500/15 text-purple-400">
+                Hardware LSB
+              </span>
+            </div>
+            <span className="text-2xl font-black text-[var(--text-main)]">
+              {ina226Power.toFixed(1)} W
+            </span>
+            <span className="text-[11px] text-[var(--text-muted)] font-medium">
+              Bus Voltage × Current
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Detailed Dual Sensor Breakdown & Battery Level Card */}
       <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm">
         <div className="flex items-center justify-between gap-2 mb-3">
           <span className="font-bold text-base text-[var(--text-main)]">
-            ⚡ DC & AC Hardware Sensors Realtime Telemetry
+            ⚡ Complete Hardware Sensors Realtime Telemetry
           </span>
           <span className="px-3 py-1 rounded-full bg-[var(--bg-main)] text-xs font-bold text-[var(--text-main)] border border-[var(--border-color)]">
             {systemDcVoltage.toFixed(2)} V DC ({pct.toFixed(0)}%)
@@ -233,7 +319,11 @@ export default function OverviewTab({
         </div>
 
         <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-3.5 font-medium leading-relaxed">
-          DC Voltage (0-25V):{' '}
+          INA226 Power:{' '}
+          <strong className="text-[var(--text-main)]">
+            {ina226Power.toFixed(1)}W ({ina226BusVoltage.toFixed(2)}V / {ina226Current.toFixed(2)}A)
+          </strong>{' '}
+          | DC Voltage (0-25V):{' '}
           <strong className="text-[var(--text-main)]">
             {systemDcVoltage.toFixed(2)}V DC
           </strong>{' '}

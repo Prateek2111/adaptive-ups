@@ -22,6 +22,11 @@ const sendData = async (req, res) => {
       current,
       current1,
       current2,
+      ina226BusVoltage,
+      ina226ShuntVoltage,
+      ina226Current,
+      ina226Power,
+      ina226Online,
       load1,
       load2,
       source,
@@ -39,6 +44,7 @@ const sendData = async (req, res) => {
       inputVoltage: `${inputVoltage}V AC (ZMPT101B)`,
       dcVoltage: `${dcVoltage}V DC (DC Voltage Sensor)`,
       dcCurrent: `${dcCurrent}A DC (ACS712 Sensor)`,
+      ina226: ina226Online ? `${ina226BusVoltage}V / ${ina226Current}A / ${ina226Power}W (Shunt ${ina226ShuntVoltage}mV)` : "Offline / Unconnected",
       current: `${current}A (Total JCT5052C)`,
       current1: `${current1}A (JCT5052C Sensor 1)`,
       current2: `${current2}A (JCT5052C Sensor 2)`,
@@ -63,7 +69,12 @@ const sendData = async (req, res) => {
       dcCurrent,
       current,
       current1,
-      current2
+      current2,
+      ina226BusVoltage,
+      ina226ShuntVoltage,
+      ina226Current,
+      ina226Power,
+      ina226Online
     });
     let savedData = normalized;
 

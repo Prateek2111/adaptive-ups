@@ -7,11 +7,144 @@
 #include <ArduinoOTA.h>
 #include <WebServer.h>
 #include <Update.h>
+#include <Wire.h>
 
 const char* ssid = "Prateek";
 const char* password = "Prateek123";
 
 const char* serverName = "https://adaptive-ups-v81g.onrender.com/send-data";
+
+// INA226 Hardware Configuration
+#define INA226_SDA_PIN 21
+#define INA226_SCL_PIN 22
+#define INA226_DEFAULT_ADDR 0x40
+#define SHUNT_RESISTANCE_OHMS 0.010  // 0.010 Ohm High-Side Shunt Resistor
+#define MAX_CURRENT_AMPS 15.0       // Maximum Expected Current 15A
+
+struct INA226Data {
+  float busVoltage;   // V
+  float shuntVoltage; // mV
+  float current;      // A
+  float power;        // W
+  bool valid;
+};
+
+class INA226Driver {
+private:
+  uint8_t _addr;
+  float _shuntOhms;
+  float _maxCurrent;
+  float _currentLSB;
+  float _powerLSB;
+  uint16_t _calValue;
+  bool _connected;
+
+  uint16_t readRegister(uint8_t reg) {
+    Wire.beginTransmission(_addr);
+    Wire.write(reg);
+    if (Wire.endTransmission() != 0) return 0;
+    Wire.requestFrom(_addr, (uint8_t)2);
+    if (Wire.available() < 2) return 0;
+    uint16_t val = (Wire.read() << 8) | Wire.read();
+    return val;
+  }
+
+  void writeRegister(uint8_t reg, uint16_t value) {
+    Wire.beginTransmission(_addr);
+    Wire.write(reg);
+    Wire.write((value >> 8) & 0xFF);
+    Wire.write(value & 0xFF);
+    Wire.endTransmission();
+  }
+
+public:
+  INA226Driver(uint8_t addr = INA226_DEFAULT_ADDR, float shuntOhms = SHUNT_RESISTANCE_OHMS, float maxCurrent = MAX_CURRENT_AMPS)
+    : _addr(addr), _shuntOhms(shuntOhms), _maxCurrent(maxCurrent), _connected(false) {}
+
+  bool begin(int sdaPin = INA226_SDA_PIN, int sclPin = INA226_SCL_PIN) {
+    Wire.begin(sdaPin, sclPin);
+    
+    // Auto-scan for INA226 at common I2C addresses (0x40 - 0x45)
+    uint8_t addrsToScan[] = { _addr, 0x40, 0x41, 0x44, 0x45 };
+    bool found = false;
+    for (int i = 0; i < 5; i++) {
+      uint8_t testAddr = addrsToScan[i];
+      Wire.beginTransmission(testAddr);
+      if (Wire.endTransmission() == 0) {
+        _addr = testAddr;
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      _connected = false;
+      return false;
+    }
+
+    _currentLSB = _maxCurrent / 32768.0;
+    _powerLSB = 25.0 * _currentLSB;
+    _calValue = (uint16_t)(0.00512 / (_currentLSB * _shuntOhms));
+
+    // Configure INA226: 16x averaging, 1.1ms conversion time, continuous mode
+    writeRegister(0x00, 0x4127);
+    writeRegister(0x05, _calValue);
+
+    _connected = true;
+    return true;
+  }
+
+  bool isConnected() { return _connected; }
+  uint8_t getAddress() { return _addr; }
+  float getShuntOhms() { return _shuntOhms; }
+
+  float getBusVoltage() {
+    if (!_connected) return 0.0;
+    int16_t val = (int16_t)readRegister(0x02);
+    return val * 0.00125;
+  }
+
+  float getShuntVoltage() {
+    if (!_connected) return 0.0;
+    int16_t val = (int16_t)readRegister(0x01);
+    return val * 0.0025;
+  }
+
+  float getCurrent() {
+    if (!_connected) return 0.0;
+    int16_t val = (int16_t)readRegister(0x04);
+    float currentA = val * _currentLSB;
+    if (abs(currentA) < 0.005) return 0.0;
+    return currentA;
+  }
+
+  float getPower() {
+    if (!_connected) return 0.0;
+    uint16_t val = readRegister(0x03);
+    return val * _powerLSB;
+  }
+
+  INA226Data read() {
+    INA226Data data;
+    if (!_connected) {
+      data.busVoltage = 0.0;
+      data.shuntVoltage = 0.0;
+      data.current = 0.0;
+      data.power = 0.0;
+      data.valid = false;
+      return data;
+    }
+
+    data.busVoltage = getBusVoltage();
+    data.shuntVoltage = getShuntVoltage();
+    data.current = getCurrent();
+    data.power = getPower();
+    data.valid = (data.busVoltage > 0.5);
+    return data;
+  }
+};
+
+INA226Driver ina226(INA226_DEFAULT_ADDR, SHUNT_RESISTANCE_OHMS, MAX_CURRENT_AMPS);
 
 // Sensor Pin Configuration
 #define ONE_WIRE_BUS 4       // DS18B20 Temp Sensor
@@ -26,7 +159,7 @@ const char* serverName = "https://adaptive-ups-v81g.onrender.com/send-data";
 #define RELAY_LOAD1       5    // Relay 2 - Load 1 / Inverter Cutoff Relay (GPIO 5)
 #define RELAY_LOAD2       15   // Relay 3 - Load 2 Output Relay (GPIO 15)
 #define RELAY_BATT_SUPPLY 19   // Relay 4 - Battery-to-Inverter DC Supply Relay (GPIO 19)
-#define RELAY_CHARGER     21   // Relay 5 - Battery Charger Control Relay (GPIO 21)
+#define RELAY_CHARGER     27   // Relay 5 - Battery Charger Control Relay (GPIO 277)
 
 float adc_voltage = 0.0;
 float in_voltage = 0.0;  // Battery DC Voltage
@@ -606,6 +739,20 @@ void handleSerialInput() {
     calibrateACS712();
     Serial.println("✅ ACS712 zero-offset calibrated to: " + String(acs712_zero_offset, 3) + " V");
   }
+  else if (cmd == "ina" || cmd == "ina226" || cmd == "test ina" || cmd == "test ina226") {
+    INA226Data d = ina226.read();
+    Serial.println("\n=======================================================================");
+    Serial.println("  ⚡ INA226 HIGH-PRECISION I2C POWER SENSOR DIAGNOSTIC TEST");
+    Serial.println("=======================================================================");
+    Serial.printf("  • I2C Bus Address       : 0x%02X\n", ina226.getAddress());
+    Serial.printf("  • Sensor Status         : %s\n", ina226.isConnected() ? "OK / ONLINE" : "OFFLINE / UNREACHABLE");
+    Serial.printf("  • Shunt Resistance      : %.3f Ω\n", ina226.getShuntOhms());
+    Serial.printf("  • Bus Voltage           : %.2f V DC\n", d.busVoltage);
+    Serial.printf("  • Shunt Voltage         : %.3f mV\n", d.shuntVoltage);
+    Serial.printf("  • DC Current            : %.2f A DC\n", d.current);
+    Serial.printf("  • Power                 : %.2f W\n", d.power);
+    Serial.println("=======================================================================\n");
+  }
   else if (cmd == "status") {
     Serial.printf("\n📊 5-Relay Status: Mains [%s] | Load 1 [%s] | Load 2 [%s] | Batt DC [%s] | Charger [%s]\n",
                   sourceState ? "MAINS" : "INVERTER",
@@ -626,6 +773,19 @@ void handleSerialInput() {
 void setup() {
   Serial.begin(115200);
   Serial.setTimeout(100); // 100ms non-blocking serial timeout for instant command execution
+
+  // Initialize INA226 High-Precision I2C Sensor
+  Serial.println("[INA226] Initializing...");
+  if (ina226.begin(INA226_SDA_PIN, INA226_SCL_PIN)) {
+    Serial.printf("[INA226] Found at 0x%02X\n", ina226.getAddress());
+    Serial.printf("[INA226] Shunt: %.3f Ω\n", ina226.getShuntOhms());
+    INA226Data initData = ina226.read();
+    Serial.printf("[INA226] Bus Voltage: %.2f V\n", initData.busVoltage);
+    Serial.printf("[INA226] Current: %.2f A\n", initData.current);
+    Serial.printf("[INA226] Power: %.2f W\n", initData.power);
+  } else {
+    Serial.println("[INA226] Not detected");
+  }
 
   // Relay outputs
   pinMode(RELAY_SOURCE, OUTPUT);
@@ -1033,12 +1193,20 @@ void loop() {
       http.begin(client, serverName);
       http.addHeader("Content-Type", "application/json");
 
-      // Read DC Battery Voltage from 0-25V DC Voltage Sensor (GPIO 34)
-      in_voltage = readDCVoltageSensor();
-      float batteryPercentage = voltageToSOC(in_voltage);
+      // Read High-Precision INA226 Sensor Data (I2C 0x40)
+      INA226Data inaData = ina226.read();
+      float dcCurrent = 0.0;
 
-      // Read DC Current from ACS712 DC Current Sensor (GPIO 36)
-      float dcCurrent = readDCCurrentACS712(ACS712_PIN);
+      if (inaData.valid) {
+        in_voltage = inaData.busVoltage;
+        dcCurrent = abs(inaData.current);
+      } else {
+        // Fallback to analog DC voltage divider and ACS712 sensor
+        in_voltage = readDCVoltageSensor();
+        dcCurrent = readDCCurrentACS712(ACS712_PIN);
+      }
+
+      float batteryPercentage = voltageToSOC(in_voltage);
 
       // Read AC Current from Dual JCT5052C Sensors (GPIO 32 for Load 1, GPIO 33 for Load 2)
       float loadCurrent1 = readACCurrentJCT5052C(JCT5052C_PIN1);
@@ -1067,6 +1235,11 @@ void loop() {
       doc["current"] = totalLoadCurrent;
       doc["current1"] = loadCurrent1;
       doc["current2"] = loadCurrent2;
+      doc["ina226BusVoltage"] = inaData.busVoltage;
+      doc["ina226ShuntVoltage"] = inaData.shuntVoltage;
+      doc["ina226Current"] = inaData.current;
+      doc["ina226Power"] = inaData.power;
+      doc["ina226Online"] = ina226.isConnected();
       doc["source"] = sourceState ? "MAINS" : "INVERTER";
       doc["supply"] = sourceState;
       doc["load1"] = l1State;

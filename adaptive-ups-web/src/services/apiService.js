@@ -53,6 +53,11 @@ class ApiService {
       current: totalC,
       current1: c1,
       current2: c2,
+      ina226BusVoltage: parseNum(data.ina226BusVoltage, parseNum(data.dcVoltage, defaultDcV)),
+      ina226ShuntVoltage: parseNum(data.ina226ShuntVoltage, 0),
+      ina226Current: parseNum(data.ina226Current, parseNum(data.dcCurrent, 0)),
+      ina226Power: parseNum(data.ina226Power, 0),
+      ina226Online: data.ina226Online === true,
     };
   }
 
