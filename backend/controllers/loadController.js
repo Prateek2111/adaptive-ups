@@ -13,6 +13,14 @@ const {
 } = require("../services/fallbackService");
 
 async function getAllLoads(req, res) {
+  const { getSimulationStatus } = require("../services/simulationService");
+  const simStatus = getSimulationStatus();
+
+  // In SIMULATION mode: do not overwrite memory state with physical MongoDB relay state!
+  if (simStatus && simStatus.batterySource === "SIMULATION") {
+    return res.json(getLoads());
+  }
+
   if (isDbConnected()) {
     try {
       const doc = await Relay.findOne().lean();

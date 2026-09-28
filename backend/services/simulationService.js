@@ -193,6 +193,26 @@ function evaluateCombinedAdaptiveLogic(currentSoc, currentTemp, isSimulation = f
   }
   simulationState.systemWarning = systemWarning;
 
+  // Sync priority with global settings fallback if available
+  try {
+    const { getSettingsFallback } = require("./fallbackService");
+    const settings = getSettingsFallback();
+    if (settings && settings.priorityLoad) {
+      const pLoad = String(settings.priorityLoad).toLowerCase();
+      for (const load of loadConfigurations) {
+        if (pLoad === "load1") {
+          if (load.id === "load1") load.priority = PRIORITY_LEVELS.HIGH;
+          if (load.id === "load2") load.priority = PRIORITY_LEVELS.LOW;
+        } else if (pLoad === "load2") {
+          if (load.id === "load2") load.priority = PRIORITY_LEVELS.HIGH;
+          if (load.id === "load1") load.priority = PRIORITY_LEVELS.LOW;
+        }
+      }
+    }
+  } catch (err) {
+    // Ignore setting sync errors
+  }
+
   for (const load of loadConfigurations) {
     const priority = (load.priority || PRIORITY_LEVELS.LOW).toUpperCase();
     const tSens = (load.thermalSensitivity || THERMAL_SENSITIVITY.LOW).toUpperCase();
@@ -256,13 +276,13 @@ function evaluateCombinedAdaptiveLogic(currentSoc, currentTemp, isSimulation = f
 
       addLog(actionMsg, shouldBeOn ? "ok" : "warn");
       actionsTaken.push({ loadId: load.id, state: shouldBeOn, reason: finalReason });
-
-      // Sync load state with backend fallbackService
-      const { setLoad } = require("./fallbackService");
-      setLoad(load.id, shouldBeOn);
     } else if (!shouldBeOn) {
       load.shedReason = finalReason;
     }
+
+    // Always sync load state with backend fallbackService
+    const { setLoad } = require("./fallbackService");
+    setLoad(load.id, shouldBeOn);
   }
 
   return actionsTaken;
@@ -613,7 +633,7 @@ function getLoadConfigurations() {
   const currentLoads = getLoads();
   return loadConfigurations.map(l => ({
     ...l,
-    state: currentLoads[l.id] !== undefined ? currentLoads[l.id] : l.state
+    state: l.state !== undefined ? Boolean(l.state) : (currentLoads[l.id] !== undefined ? currentLoads[l.id] : true)
   }));
 }
 
