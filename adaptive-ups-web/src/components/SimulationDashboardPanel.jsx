@@ -220,6 +220,15 @@ export default function SimulationDashboardPanel({ addLog }) {
         tempTarget: 65,
         soc: 80,
       }));
+    } else if (scenario === 'combinedStress') {
+      setSim((prev) => ({
+        ...prev,
+        tempSpeed: 5,
+        speed: 50,
+        tempMode: 'HEATING',
+        tempTarget: 65,
+        soc: 100,
+      }));
     }
     try {
       const res = await safeApiCall((api) => api.triggerScenario(scenario));
@@ -405,7 +414,7 @@ export default function SimulationDashboardPanel({ addLog }) {
               <span>3. Combined Stress</span>
             </div>
             <span className="text-[11px] font-semibold text-[var(--text-muted)]">
-              SOC 100%→10% & Temp 30→65°C
+              SOC 100%→10% & Temp 30→65°C (50x Batt, 5x Temp)
             </span>
           </button>
 
