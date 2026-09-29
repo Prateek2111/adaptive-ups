@@ -520,6 +520,8 @@ function setTempProfile(profile) {
       startT = 45;
       targetT = 65;
       simulationState.tempMode = "HEATING";
+      simulationState.tempSpeed = 5;
+      simulationState.speed = 1;
       break;
     case "RECOVERY":
       startT = 60;
@@ -556,15 +558,16 @@ function triggerScenario(scenario) {
     startSimulation();
     addLog("⚡ Demo Scenario 1 Triggered: Battery Drain (100% -> 0%, 10x Speed)", "ok");
   } else if (scenario === "overheating") {
-    // Scenario 2: Overheating (SOC 80% constant, Temp 30°C -> 65°C)
+    // Scenario 2: Overheating (SOC 80%, Temp 30°C -> 65°C, 5x Temp Speed, 1x Battery Speed)
     resetSimulation();
     simulationState.soc = 80;
     simulationState.temperature = 30.0;
     simulationState.tempTarget = 65.0;
     simulationState.tempMode = "HEATING";
-    simulationState.tempSpeed = 10;
+    simulationState.tempSpeed = 5;
+    simulationState.speed = 1;
     startSimulation();
-    addLog("🔥 Demo Scenario 2 Triggered: Overheating (30°C -> 65°C, 10x Temp Speed)", "warn");
+    addLog("🔥 Demo Scenario 2 Triggered: Overheating (30°C -> 65°C, 5x Temp Speed, 1x Battery Speed)", "warn");
   } else if (scenario === "combinedStress") {
     // Scenario 3: Combined Stress (SOC 100% -> 10%, Temp 30°C -> 65°C)
     resetSimulation();

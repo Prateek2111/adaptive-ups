@@ -191,6 +191,15 @@ export default function SimulationDashboardPanel({ addLog }) {
   };
 
   const handleSetTempProfile = async (profile) => {
+    if (profile === 'OVERHEATING') {
+      setSim((prev) => ({
+        ...prev,
+        tempSpeed: 5,
+        speed: 1,
+        tempMode: 'HEATING',
+        tempTarget: 65,
+      }));
+    }
     try {
       const res = await safeApiCall((api) => api.setTempProfile(profile));
       if (res) setSim(res);
@@ -202,6 +211,16 @@ export default function SimulationDashboardPanel({ addLog }) {
 
   const handleTriggerScenario = async (scenario) => {
     setLoading(true);
+    if (scenario === 'overheating') {
+      setSim((prev) => ({
+        ...prev,
+        tempSpeed: 5,
+        speed: 1,
+        tempMode: 'HEATING',
+        tempTarget: 65,
+        soc: 80,
+      }));
+    }
     try {
       const res = await safeApiCall((api) => api.triggerScenario(scenario));
       if (res) setSim(res);
@@ -372,7 +391,7 @@ export default function SimulationDashboardPanel({ addLog }) {
               <span>2. Overheating</span>
             </div>
             <span className="text-[11px] font-semibold text-[var(--text-muted)]">
-              Temp: 30°C → 65°C (SOC 80%)
+              Temp: 30°C → 65°C (5x Temp, 1x Batt)
             </span>
           </button>
 
