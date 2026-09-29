@@ -75,8 +75,8 @@ export default function App() {
   const [ina226Power, setIna226Power] = useState(0.0);
   const [ina226Online, setIna226Online] = useState(false);
 
-  const [lowThresh, setLowThresh] = useState(20);
-  const [critThresh, setCritThresh] = useState(10);
+  const [lowThresh, setLowThresh] = useState(25);
+  const [critThresh, setCritThresh] = useState(5);
 
   const [espMessage, setEspMessage] = useState('');
   const [espOnline, setEspOnline] = useState(false);
@@ -188,9 +188,10 @@ export default function App() {
     setOnUtility(currentlyOnUtility);
 
     if (autoLoadSheddingEnabled && !currentlyOnUtility && battPct > 0) {
-      if (battPct <= crit && load2On && !isToggling.current) {
+      if (battPct <= crit && !isToggling.current) {
         mode = 'critical';
-        handleSetRelayState(2, false);
+        if (load1On) handleSetRelayState(1, false);
+        if (load2On) handleSetRelayState(2, false);
       } else if (battPct <= low && !isToggling.current) {
         mode = 'low';
         if (priority === 'load2' && load1On) {
@@ -203,10 +204,10 @@ export default function App() {
 
     if (prevBatteryMode.current !== mode) {
       if (mode === 'critical') {
-        addLog('CRITICAL: Auto-shedding engaged - Load-2 OFF', 'crit');
+        addLog('CRITICAL: Battery ≤ 5% - Cutoff engaged (Load 1 / D5 & Load 2 / GPIO 15 OFF)', 'crit');
       } else if (mode === 'low') {
-        const active = priority === 'load2' ? 'Load-2' : 'Load-1';
-        addLog(`Low battery - Auto shedding ${active} priority`, 'warn');
+        const active = priority === 'load2' ? 'Load-1 (D5)' : 'Load-2 (GPIO 15)';
+        addLog(`Low battery (≤ 25%) - Auto-shedding ${active}`, 'warn');
       }
       prevBatteryMode.current = mode;
     }

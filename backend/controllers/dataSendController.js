@@ -91,7 +91,7 @@ const sendData = async (req, res) => {
     const appCommandRecent = (Date.now() - getLastAppCommandTimestamp()) < 10000;
 
     const hwStates = {};
-    if (typeof load1 === "boolean") hwStates.load1 = load1;
+    if (typeof load1 === "boolean") hwStates.load1 = !load1; // Hardware relay on D5 is active-low: invert to match logical ON/OFF
     if (typeof load2 === "boolean") hwStates.load2 = load2;
     const suppVal = typeof supply === "boolean" ? supply : (source === "MAINS" || source === true ? true : (source === "INVERTER" || source === false ? false : undefined));
     if (typeof suppVal === "boolean") {
@@ -128,7 +128,7 @@ const sendData = async (req, res) => {
     }
 
     const responseLoads = {
-      load1: currentLoads.load1,
+      load1: !currentLoads.load1, // Inverted for physical D5 active-low relay: false=LOW (ON), true=HIGH (OFF)
       load2: currentLoads.load2,
       supply: currentLoads.supply,
       source: currentLoads.supply,

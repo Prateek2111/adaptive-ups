@@ -43,7 +43,7 @@ export default function SimulationDashboardPanel({ addLog }) {
     loads: [
       {
         id: 'load1',
-        name: 'WiFi Router & Primary Load',
+        name: 'Primary Load (D5 / GPIO 5)',
         powerRating: 65,
         priority: 'HIGH',
         thermalSensitivity: 'LOW',
@@ -52,7 +52,7 @@ export default function SimulationDashboardPanel({ addLog }) {
       },
       {
         id: 'load2',
-        name: 'Lighting & Secondary Load',
+        name: 'Secondary Load (GPIO 15)',
         powerRating: 45,
         priority: 'LOW',
         thermalSensitivity: 'HIGH',

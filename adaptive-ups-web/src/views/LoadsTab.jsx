@@ -147,20 +147,20 @@ export default function LoadsTab({
 
           {/* RELAY 2: INVERTER CUTOFF RELAY */}
           <RelayTile
-            title="Relay 2: Load 2 Green Light"
+            title="Relay 2: Load 1 Green Light (GPIO 5 / D5)"
             subtitle="Inverter AC Backup Cutoff • Priority Supply Relay"
             icon={Lightbulb}
-            iconColor={load1On ? '#38BDF8' : '#94A3B8'}
-            stateText={load1On ? 'INVERTER ACTIVE (ON)' : 'INVERTER CUTOFF (OFF)'}
-            stateColor={load1On ? '#38BDF8' : '#94A3B8'}
-            value={load1On}
+            iconColor={!load1On ? '#38BDF8' : '#94A3B8'}
+            stateText={!load1On ? 'INVERTER ACTIVE (ON)' : 'INVERTER CUTOFF (OFF)'}
+            stateColor={!load1On ? '#38BDF8' : '#94A3B8'}
+            value={!load1On}
             isPending={pendingRelayId === 'load1'}
-            onChanged={(val) => onSetRelayState(1, val)}
+            onChanged={(val) => onSetRelayState(1, !val)}
           />
 
           {/* RELAY 3: LOAD OUTPUT CIRCUIT RELAY */}
           <RelayTile
-            title="Relay 3: Load Output Relay (GPIO 15)"
+            title="Relay 3: Load 2 (White Light) (GPIO 15)"
             subtitle="Load Output Circuit Cutoff • Secondary Circuit"
             icon={Cpu}
             iconColor={load2On ? '#A78BFA' : '#94A3B8'}

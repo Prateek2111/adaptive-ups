@@ -118,14 +118,14 @@ class ApiService {
     try {
       const data = await this._request('/api/settings');
       return {
-        lowBatteryThreshold: parseNum(data.lowBatteryThreshold, 20),
-        criticalThreshold: parseNum(data.criticalThreshold, 10),
+        lowBatteryThreshold: parseNum(data.lowBatteryThreshold, 25),
+        criticalThreshold: parseNum(data.criticalThreshold, 5),
         priorityLoad: String(data.priorityLoad || 'load1'),
       };
     } catch {
       return {
-        lowBatteryThreshold: 20,
-        criticalThreshold: 10,
+        lowBatteryThreshold: 25,
+        criticalThreshold: 5,
         priorityLoad: 'load1',
       };
     }

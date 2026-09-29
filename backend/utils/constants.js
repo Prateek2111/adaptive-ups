@@ -14,8 +14,8 @@ const DEFAULT_SENSOR_DATA = {
   ina226Online: false
 };
 const DEFAULT_SETTINGS = {
-  lowBatteryThreshold: 20,
-  criticalThreshold: 10,
+  lowBatteryThreshold: 25,
+  criticalThreshold: 5,
   priorityLoad: "load1"
 };
 

@@ -38,7 +38,7 @@ const THERMAL_THRESHOLDS = {
 let loadConfigurations = [
   {
     id: "load1",
-    name: "WiFi Router & Primary Load",
+    name: "Primary Load (D5 / GPIO 5)",
     powerRating: 65, // Watts
     priority: PRIORITY_LEVELS.HIGH,
     thermalSensitivity: THERMAL_SENSITIVITY.LOW,
@@ -48,7 +48,7 @@ let loadConfigurations = [
   },
   {
     id: "load2",
-    name: "Lighting & Secondary Load",
+    name: "Secondary Load (GPIO 15)",
     powerRating: 45, // Watts
     priority: PRIORITY_LEVELS.LOW,
     thermalSensitivity: THERMAL_SENSITIVITY.HIGH,
@@ -71,7 +71,7 @@ const BATTERY_SPECS = {
 let simulationState = {
   batterySource: "REAL", // "REAL" or "SIMULATION"
   status: "IDLE", // "IDLE", "RUNNING", "PAUSED", "STOPPED", "COMPLETED"
-  
+
   // Battery State
   soc: 100.0,
   speed: 1, // 1x, 5x, 10x, 25x, 50x, 100x
@@ -224,20 +224,20 @@ function evaluateCombinedAdaptiveLogic(currentSoc, currentTemp, isSimulation = f
     if (currentSoc <= 0) {
       socAllows = false;
       socReason = "Battery completely depleted (0% SOC)";
-    } else if (currentSoc < 5) {
+    } else if (currentSoc <= 5) {
       if (priority !== PRIORITY_LEVELS.CRITICAL) {
         socAllows = false;
-        socReason = `Battery SOC (${currentSoc.toFixed(1)}%) below 5% critical cutoff. Priority '${priority}' shed.`;
+        socReason = `Battery SOC (${currentSoc.toFixed(1)}%) at/below 5% critical cutoff. Priority '${priority}' shed.`;
       }
     } else if (currentSoc < 15) {
       if (priority === PRIORITY_LEVELS.LOW || priority === PRIORITY_LEVELS.MEDIUM) {
         socAllows = false;
         socReason = `Battery SOC (${currentSoc.toFixed(1)}%) below 15% threshold. Priority '${priority}' shed.`;
       }
-    } else if (currentSoc < 30) {
+    } else if (currentSoc <= 25) {
       if (priority === PRIORITY_LEVELS.LOW) {
         socAllows = false;
-        socReason = `Battery SOC (${currentSoc.toFixed(1)}%) below 30% threshold. Priority '${priority}' shed.`;
+        socReason = `Battery SOC (${currentSoc.toFixed(1)}%) at/below 25% threshold. Priority '${priority}' shed.`;
       }
     }
 
@@ -403,7 +403,7 @@ function startSimulation() {
   simulationState.lastUpdated = Date.now();
   startSimulationTick();
   addLog(`Simulation started (SOC: ${simulationState.soc.toFixed(0)}%, Temp: ${simulationState.temperature.toFixed(1)}°C)`, "ok");
-  
+
   evaluateCombinedAdaptiveLogic(simulationState.soc, simulationState.temperature, true);
   return getSimulationStatus();
 }
