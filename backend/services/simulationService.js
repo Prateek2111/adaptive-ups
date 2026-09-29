@@ -569,16 +569,16 @@ function triggerScenario(scenario) {
     startSimulation();
     addLog("🔥 Demo Scenario 2 Triggered: Overheating (30°C -> 65°C, 5x Temp Speed, 1x Battery Speed)", "warn");
   } else if (scenario === "combinedStress") {
-    // Scenario 3: Combined Stress (SOC 100% -> 10%, Temp 30°C -> 65°C, 50x Batt Speed, 5x Temp Speed)
+    // Scenario 3: Combined Stress (SOC 100% -> 10%, Temp 40°C -> 65°C, 100x Batt Speed, 1x Temp Speed)
     resetSimulation();
     simulationState.soc = 100;
-    simulationState.temperature = 30.0;
+    simulationState.temperature = 40.0;
     simulationState.tempTarget = 65.0;
     simulationState.tempMode = "HEATING";
-    simulationState.speed = 50;
-    simulationState.tempSpeed = 5;
+    simulationState.speed = 100;
+    simulationState.tempSpeed = 1;
     startSimulation();
-    addLog("🚨 Demo Scenario 3 Triggered: Combined Stress (SOC 100%->10%, Temp 30°C->65°C, 50x Batt Speed, 5x Temp Speed)", "crit");
+    addLog("🚨 Demo Scenario 3 Triggered: Combined Stress (SOC 100%->10%, Temp 40°C->65°C, 100x Batt Speed, 1x Temp Speed)", "crit");
   } else if (scenario === "recovery") {
     // Scenario 4: Recovery (SOC 15%, Temp 65°C -> 30°C)
     resetSimulation();
