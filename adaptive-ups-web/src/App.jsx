@@ -149,10 +149,14 @@ export default function App() {
           : sensor.battery !== undefined
           ? 9.0 + (sensor.battery / 100.0) * 3.6
           : 12.6;
-      const dynamicDcCurrent =
+      let dynamicDcCurrent =
         sensor.dcCurrent !== undefined && sensor.dcCurrent !== null
           ? Number(sensor.dcCurrent)
           : 0.0;
+      // Filter out ghost 25.00A calculation from disconnected ACS712 pin (abs(0.0V - 2.5V) / 0.1V/A = 25A)
+      if (Math.abs(dynamicDcCurrent - 25.0) < 0.05 && !sensor.ina226Online) {
+        dynamicDcCurrent = 0.0;
+      }
       setSystemDcCurrent(dynamicDcCurrent);
       setSystemCurrent(sensor.current);
       setSystemCurrent1(sensor.current1 || 0);

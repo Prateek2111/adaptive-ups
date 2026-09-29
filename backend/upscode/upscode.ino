@@ -14,11 +14,11 @@ const char* password = "Prateek123";
 
 const char* serverName = "https://adaptive-ups-v81g.onrender.com/send-data";
 
-// INA226 Hardware Configuration
+// INA226 Hardware Configuration (I2C Bus: SDA -> GPIO 21, SCL -> GPIO 22)
 #define INA226_SDA_PIN 21
 #define INA226_SCL_PIN 22
 #define INA226_DEFAULT_ADDR 0x40
-#define SHUNT_RESISTANCE_OHMS 0.010  // 0.010 Ohm High-Side Shunt Resistor
+#define SHUNT_RESISTANCE_OHMS 0.010  // 0.010 Ohm High-Side Shunt Resistor (R010)
 #define MAX_CURRENT_AMPS 15.0       // Maximum Expected Current 15A
 
 struct INA226Data {
@@ -38,37 +38,76 @@ private:
   float _powerLSB;
   uint16_t _calValue;
   bool _connected;
+  unsigned long _lastReconnectAttempt;
 
-  uint16_t readRegister(uint8_t reg) {
-    Wire.beginTransmission(_addr);
-    Wire.write(reg);
-    if (Wire.endTransmission() != 0) return 0;
-    Wire.requestFrom(_addr, (uint8_t)2);
-    if (Wire.available() < 2) return 0;
-    uint16_t val = (Wire.read() << 8) | Wire.read();
-    return val;
-  }
-
-  void writeRegister(uint8_t reg, uint16_t value) {
-    Wire.beginTransmission(_addr);
-    Wire.write(reg);
-    Wire.write((value >> 8) & 0xFF);
-    Wire.write(value & 0xFF);
-    Wire.endTransmission();
+  void recoverBus(int sdaPin, int sclPin) {
+    // Clock out 9 cycles on SCL to release any slave holding SDA LOW
+    pinMode(sclPin, OUTPUT);
+    pinMode(sdaPin, INPUT_PULLUP);
+    for (int i = 0; i < 9; i++) {
+      digitalWrite(sclPin, LOW);
+      delayMicroseconds(5);
+      digitalWrite(sclPin, HIGH);
+      delayMicroseconds(5);
+    }
+    // Generate I2C STOP condition to clear state
+    pinMode(sdaPin, OUTPUT);
+    digitalWrite(sdaPin, LOW);
+    delayMicroseconds(5);
+    digitalWrite(sclPin, HIGH);
+    delayMicroseconds(5);
+    digitalWrite(sdaPin, HIGH);
+    delayMicroseconds(5);
+    pinMode(sdaPin, INPUT_PULLUP);
+    pinMode(sclPin, INPUT_PULLUP);
   }
 
 public:
   INA226Driver(uint8_t addr = INA226_DEFAULT_ADDR, float shuntOhms = SHUNT_RESISTANCE_OHMS, float maxCurrent = MAX_CURRENT_AMPS)
-    : _addr(addr), _shuntOhms(shuntOhms), _maxCurrent(maxCurrent), _connected(false) {}
+    : _addr(addr), _shuntOhms(shuntOhms), _maxCurrent(maxCurrent), _connected(false), _lastReconnectAttempt(0) {}
+
+  uint16_t readRegister(uint8_t reg) {
+    // Repeated start transaction
+    Wire.beginTransmission(_addr);
+    Wire.write(reg);
+    if (Wire.endTransmission(false) != 0) {
+      // Fallback with standard STOP if repeated start not supported
+      Wire.beginTransmission(_addr);
+      Wire.write(reg);
+      if (Wire.endTransmission(true) != 0) return 0;
+    }
+    uint8_t count = Wire.requestFrom((uint8_t)_addr, (uint8_t)2, (uint8_t)true);
+    if (count < 2 || Wire.available() < 2) return 0;
+    uint8_t msb = Wire.read();
+    uint8_t lsb = Wire.read();
+    return ((uint16_t)msb << 8) | lsb;
+  }
+
+  bool writeRegister(uint8_t reg, uint16_t value) {
+    Wire.beginTransmission(_addr);
+    Wire.write(reg);
+    Wire.write((uint8_t)((value >> 8) & 0xFF));
+    Wire.write((uint8_t)(value & 0xFF));
+    return (Wire.endTransmission() == 0);
+  }
 
   bool begin(int sdaPin = INA226_SDA_PIN, int sclPin = INA226_SCL_PIN) {
+    // 1. Bus recovery to clear any bus lockup on boot/reset
+    recoverBus(sdaPin, sclPin);
+
+    // 2. Initialize ESP32 I2C on GPIO 21 (SDA) and GPIO 22 (SCL)
     Wire.begin(sdaPin, sclPin);
-    
-    // Auto-scan for INA226 at common I2C addresses (0x40 - 0x45)
-    uint8_t addrsToScan[] = { _addr, 0x40, 0x41, 0x44, 0x45 };
+    Wire.setClock(100000); // 100 kHz standard mode for reliability with jumper wires
+    Wire.setTimeOut(50);   // 50ms timeout to prevent hanging
+
+    // 3. Scan I2C addresses: first try default/configured address, then all INA226 addresses (0x40 - 0x4F)
+    const uint8_t inaAddresses[] = {
+      _addr, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46,
+      0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F
+    };
     bool found = false;
-    for (int i = 0; i < 5; i++) {
-      uint8_t testAddr = addrsToScan[i];
+    for (size_t i = 0; i < sizeof(inaAddresses); i++) {
+      uint8_t testAddr = inaAddresses[i];
       Wire.beginTransmission(testAddr);
       if (Wire.endTransmission() == 0) {
         _addr = testAddr;
@@ -77,17 +116,31 @@ public:
       }
     }
 
+    // 4. If not found in primary list, scan remaining standard 7-bit I2C addresses (0x08 - 0x77)
+    if (!found) {
+      for (uint8_t testAddr = 0x08; testAddr <= 0x77; testAddr++) {
+        Wire.beginTransmission(testAddr);
+        if (Wire.endTransmission() == 0) {
+          _addr = testAddr;
+          found = true;
+          break;
+        }
+      }
+    }
+
     if (!found) {
       _connected = false;
       return false;
     }
 
+    // Compute calibration parameters
     _currentLSB = _maxCurrent / 32768.0;
     _powerLSB = 25.0 * _currentLSB;
     _calValue = (uint16_t)(0.00512 / (_currentLSB * _shuntOhms));
 
-    // Configure INA226: 16x averaging, 1.1ms conversion time, continuous mode
-    writeRegister(0x00, 0x4127);
+    // Configure INA226:
+    // Config Reg 0x00: 0x4527 = 16x averaging, 1.1ms conversion, continuous shunt & bus
+    writeRegister(0x00, 0x4527);
     writeRegister(0x05, _calValue);
 
     _connected = true;
@@ -97,23 +150,37 @@ public:
   bool isConnected() { return _connected; }
   uint8_t getAddress() { return _addr; }
   float getShuntOhms() { return _shuntOhms; }
+  uint16_t getCalValue() { return _calValue; }
 
   float getBusVoltage() {
     if (!_connected) return 0.0;
-    int16_t val = (int16_t)readRegister(0x02);
-    return val * 0.00125;
+    uint16_t val = readRegister(0x02);
+    return val * 0.00125; // 1.25 mV/LSB -> Volts
   }
 
   float getShuntVoltage() {
     if (!_connected) return 0.0;
     int16_t val = (int16_t)readRegister(0x01);
-    return val * 0.0025;
+    return val * 0.0025; // 2.5 µV/LSB -> mV
   }
 
   float getCurrent() {
     if (!_connected) return 0.0;
     int16_t val = (int16_t)readRegister(0x04);
     float currentA = val * _currentLSB;
+
+    // Dual calculation safety:
+    // If Reg 0x04 is 0 (e.g. if chip lost calibration after glitch or brownout),
+    // compute directly from Shunt Voltage (Reg 0x01 does not rely on calibration register!)
+    float shuntMv = getShuntVoltage();
+    float directCurrent = shuntMv / (_shuntOhms * 1000.0); // I = V_shunt / R_shunt
+
+    if (abs(currentA) < 0.001 && abs(directCurrent) >= 0.005) {
+      // Re-program calibration register in case it was reset
+      writeRegister(0x05, _calValue);
+      currentA = directCurrent;
+    }
+
     if (abs(currentA) < 0.005) return 0.0;
     return currentA;
   }
@@ -121,11 +188,29 @@ public:
   float getPower() {
     if (!_connected) return 0.0;
     uint16_t val = readRegister(0x03);
-    return val * _powerLSB;
+    float p = val * _powerLSB;
+    if (p < 0.01) {
+      // Direct P = V * I fallback
+      float v = getBusVoltage();
+      float i = abs(getCurrent());
+      if (v > 0.1 && i > 0.005) {
+        p = v * i;
+      }
+    }
+    return p;
   }
 
   INA226Data read() {
     INA226Data data;
+
+    // Auto-reconnect in background if sensor was offline or connected after boot
+    if (!_connected) {
+      if (millis() - _lastReconnectAttempt > 3000) {
+        _lastReconnectAttempt = millis();
+        begin(INA226_SDA_PIN, INA226_SCL_PIN);
+      }
+    }
+
     if (!_connected) {
       data.busVoltage = 0.0;
       data.shuntVoltage = 0.0;
@@ -139,7 +224,16 @@ public:
     data.shuntVoltage = getShuntVoltage();
     data.current = getCurrent();
     data.power = getPower();
-    data.valid = (data.busVoltage > 0.5);
+
+    // Verify I2C link is still alive
+    Wire.beginTransmission(_addr);
+    if (Wire.endTransmission() != 0) {
+      _connected = false;
+      data.valid = false;
+      return data;
+    }
+
+    data.valid = true;
     return data;
   }
 };
@@ -159,7 +253,7 @@ INA226Driver ina226(INA226_DEFAULT_ADDR, SHUNT_RESISTANCE_OHMS, MAX_CURRENT_AMPS
 #define RELAY_LOAD1       5    // Relay 2 - Load 1 / Inverter Cutoff Relay (GPIO 5)
 #define RELAY_LOAD2       15   // Relay 3 - Load 2 Output Relay (GPIO 15)
 #define RELAY_BATT_SUPPLY 19   // Relay 4 - Battery-to-Inverter DC Supply Relay (GPIO 19)
-#define RELAY_CHARGER     27   // Relay 5 - Battery Charger Control Relay (GPIO 21)
+#define RELAY_CHARGER     27   // Relay 5 - Battery Charger Control Relay (GPIO 277)
 
 float adc_voltage = 0.0;
 float in_voltage = 0.0;  // Battery DC Voltage
@@ -259,7 +353,7 @@ const char* otaWebPage =
 "<button class='btn' onclick='toggleRelay(1)'>🔌 Toggle Load 1 (Relay 2 / GPIO 5)</button>"
 "<button class='btn' onclick='toggleRelay(2)'>🔌 Toggle Load 2 (Relay 3 / GPIO 15)</button>"
 "<button class='btn' onclick='toggleRelay(\"battSupply\")'>🔋 Toggle Battery DC Supply (Relay 4 / GPIO 19)</button>"
-"<button class='btn' onclick='toggleRelay(\"charger\")'>⚡ Toggle Battery Charger (Relay 5 / GPIO 21)</button>"
+"<button class='btn' onclick='toggleRelay(\"charger\")'>⚡ Toggle Battery Charger (Relay 5 / GPIO 27)</button>"
 "<button class='btn btn-secondary' onclick='toggleTest()'>🔄 Hardware Auto-Blink Test Mode</button>"
 "<button class='btn btn-secondary' onclick='invertPolarity()'>⚡ Invert Relay Polarity (Low ↔ High)</button>"
 "<button class='btn btn-secondary' onclick='calibrateACS()'>🎯 Calibrate ACS712 Zero Offset</button>"
@@ -448,7 +542,7 @@ float readDCVoltageSensor() {
   return smoothedDC;
 }
 
-// Function to measure Real-Time Dynamic DC Current directly from ACS712 Sensor (GPIO 36 / VP)
+// Function to measure Real-Time Dynamic DC Current directly from ACS712 Sensor (GPIO 12)
 float readDCCurrentACS712(int pin) {
   long sum = 0;
   int currentMax = 0;
@@ -467,6 +561,15 @@ float readDCCurrentACS712(int pin) {
   lastAcsVoltage = vSense;
   lastAcsP2p = currentMax - currentMin;
 
+  // Pin Disconnected / Grounded / Floating Detection:
+  // An active ACS712 outputs a quiescent bias around ~2.5V (5V VCC) or ~1.65V (3.3V VCC),
+  // which corresponds to ADC counts between 1400 and 3400.
+  // If pin reads near 0 (< 350 ADC counts / ~0.28V) or saturated (> 3900),
+  // there is NO active ACS712 sensor connected. Return 0.0 A immediately!
+  if (avgAdc < 350 || avgAdc > 3900) {
+    return 0.0;
+  }
+
   // Quiescent zero offset detection if not calibrated
   if (!acs712_calibrated) {
     if (avgAdc >= 2600) {
@@ -474,15 +577,16 @@ float readDCCurrentACS712(int pin) {
     } else if (avgAdc >= 1400 && avgAdc < 2600) {
       acs712_zero_offset = 1.65; // Standard 3.3V VCC ACS712 (quiescent ~1.65V)
     } else {
-      acs712_zero_offset = 2.50;
+      // Pin reading is outside valid quiescent bias range; no sensor present
+      return 0.0;
     }
   }
 
   // Calculate real-time dynamic current directly from physical sensor voltage
   float dynamicCurrent = abs(vSense - acs712_zero_offset) / acs712_dc_sensitivity;
 
-  // Cutoff idle noise floor below 0.05 A
-  if (dynamicCurrent < 0.05) {
+  // Cutoff idle noise floor below 0.08 A
+  if (dynamicCurrent < 0.08) {
     dynamicCurrent = 0.0;
   }
 
@@ -589,10 +693,12 @@ void printSerialHelp() {
   Serial.println("  • 'mains' / 'inverter'     : Set Mains Grid / Inverter Source");
   Serial.println("  • '4' or 'batt'            : Toggle Battery-to-Inverter DC Relay (GPIO 19)");
   Serial.println("  • 'batt on' / 'batt off'   : Set Battery DC Supply ON / OFF");
-  Serial.println("  • '5' or 'charger'         : Toggle Battery Charger Relay (GPIO 21)");
+  Serial.println("  • '5' or 'charger'         : Toggle Battery Charger Relay (GPIO 27)");
   Serial.println("  • 'charger on' / 'off'     : Set Battery Charger ON / OFF");
   Serial.println("  • 'all on' / 'all off'     : Turn ALL 5 Relays ON / OFF");
   Serial.println("  • 'cal' or 'calibrate'     : Auto-calibrate ACS712 zero-current baseline");
+  Serial.println("  • 'ina' or 'ina226'        : Read INA226 high-precision sensor diagnostics");
+  Serial.println("  • 'scan' or 'i2c'          : Scan I2C bus for connected devices (SDA 21, SCL 22)");
   Serial.println("  • 'status'                 : View current states of all 5 relays");
   Serial.println("=======================================================================\n");
 }
@@ -684,24 +790,24 @@ void handleSerialInput() {
     actionTaken = true;
     webLog("\n💻 [SERIAL INPUT] Battery DC Supply Relay -> OFF (GPIO 19)");
   }
-  // RELAY 5: BATTERY CHARGER RELAY (GPIO 21)
+  // RELAY 5: BATTERY CHARGER RELAY (GPIO 27)
   else if (cmd == "5" || cmd == "charger" || cmd == "charge" || cmd == "toggle charger") {
     chargerState = !chargerState;
     lastServerCharger = chargerState;
     actionTaken = true;
-    webLog("\n💻 [SERIAL INPUT] Battery Charger Relay Toggled -> " + String(chargerState ? "ON (GPIO 21)" : "OFF (GPIO 21)"));
+    webLog("\n💻 [SERIAL INPUT] Battery Charger Relay Toggled -> " + String(chargerState ? "ON (GPIO 27)" : "OFF (GPIO 27)"));
   }
   else if (cmd == "charger on" || cmd == "charge on" || cmd == "5 on") {
     chargerState = true;
     lastServerCharger = true;
     actionTaken = true;
-    webLog("\n💻 [SERIAL INPUT] Battery Charger Relay -> ON (GPIO 21)");
+    webLog("\n💻 [SERIAL INPUT] Battery Charger Relay -> ON (GPIO 27)");
   }
   else if (cmd == "charger off" || cmd == "charge off" || cmd == "5 off") {
     chargerState = false;
     lastServerCharger = false;
     actionTaken = true;
-    webLog("\n💻 [SERIAL INPUT] Battery Charger Relay -> OFF (GPIO 21)");
+    webLog("\n💻 [SERIAL INPUT] Battery Charger Relay -> OFF (GPIO 27)");
   }
   // ALL RELAYS BATCH COMMANDS
   else if (cmd == "all on" || cmd == "on all") {
@@ -744,14 +850,36 @@ void handleSerialInput() {
     Serial.println("\n=======================================================================");
     Serial.println("  ⚡ INA226 HIGH-PRECISION I2C POWER SENSOR DIAGNOSTIC TEST");
     Serial.println("=======================================================================");
+    Serial.printf("  • Hardware Pins         : SDA = GPIO 21, SCL = GPIO 22\n");
     Serial.printf("  • I2C Bus Address       : 0x%02X\n", ina226.getAddress());
     Serial.printf("  • Sensor Status         : %s\n", ina226.isConnected() ? "OK / ONLINE" : "OFFLINE / UNREACHABLE");
-    Serial.printf("  • Shunt Resistance      : %.3f Ω\n", ina226.getShuntOhms());
+    Serial.printf("  • Shunt Resistance      : %.3f Ω (Cal Reg: 0x%04X)\n", ina226.getShuntOhms(), ina226.getCalValue());
     Serial.printf("  • Bus Voltage           : %.2f V DC\n", d.busVoltage);
     Serial.printf("  • Shunt Voltage         : %.3f mV\n", d.shuntVoltage);
     Serial.printf("  • DC Current            : %.2f A DC\n", d.current);
     Serial.printf("  • Power                 : %.2f W\n", d.power);
     Serial.println("=======================================================================\n");
+  }
+  else if (cmd == "scan" || cmd == "i2c" || cmd == "i2c scan") {
+    Serial.println("\n🔍 Scanning I2C bus (SDA=GPIO 21, SCL=GPIO 22)...");
+    int nDevices = 0;
+    for (uint8_t address = 1; address < 127; address++) {
+      Wire.beginTransmission(address);
+      uint8_t error = Wire.endTransmission();
+      if (error == 0) {
+        Serial.printf("  • Found I2C device at address 0x%02X", address);
+        if (address >= 0x40 && address <= 0x4F) {
+          Serial.printf(" (Possible INA226 / Current Sensor)");
+        }
+        Serial.println();
+        nDevices++;
+      }
+    }
+    if (nDevices == 0) {
+      Serial.println("  ⚠️ No I2C devices found! Check wiring: SDA->GPIO 21, SCL->GPIO 22, VCC->3.3V/5V, GND->GND.");
+    } else {
+      Serial.printf("  ✅ Scan finished. Found %d device(s).\n\n", nDevices);
+    }
   }
   else if (cmd == "status") {
     Serial.printf("\n📊 5-Relay Status: Mains [%s] | Load 1 [%s] | Load 2 [%s] | Batt DC [%s] | Charger [%s]\n",
@@ -774,17 +902,16 @@ void setup() {
   Serial.begin(115200);
   Serial.setTimeout(100); // 100ms non-blocking serial timeout for instant command execution
 
-  // Initialize INA226 High-Precision I2C Sensor
-  Serial.println("[INA226] Initializing...");
+  // Initialize INA226 High-Precision I2C Sensor (SDA: GPIO 21, SCL: GPIO 22)
+  Serial.printf("[INA226] Initializing on SDA (GPIO %d), SCL (GPIO %d)...\n", INA226_SDA_PIN, INA226_SCL_PIN);
   if (ina226.begin(INA226_SDA_PIN, INA226_SCL_PIN)) {
-    Serial.printf("[INA226] Found at 0x%02X\n", ina226.getAddress());
-    Serial.printf("[INA226] Shunt: %.3f Ω\n", ina226.getShuntOhms());
+    Serial.printf("[INA226] ✅ Found at 0x%02X\n", ina226.getAddress());
+    Serial.printf("[INA226] Shunt: %.3f Ω (Cal: 0x%04X)\n", ina226.getShuntOhms(), ina226.getCalValue());
     INA226Data initData = ina226.read();
-    Serial.printf("[INA226] Bus Voltage: %.2f V\n", initData.busVoltage);
-    Serial.printf("[INA226] Current: %.2f A\n", initData.current);
-    Serial.printf("[INA226] Power: %.2f W\n", initData.power);
+    Serial.printf("[INA226] Bus Voltage: %.2f V | Shunt: %.3f mV | Current: %.2f A | Power: %.2f W\n",
+                  initData.busVoltage, initData.shuntVoltage, initData.current, initData.power);
   } else {
-    Serial.println("[INA226] Not detected");
+    Serial.println("[INA226] ⚠️ Not detected during startup (auto-reconnect active in background)");
   }
 
   // Relay outputs
@@ -991,29 +1118,29 @@ void setup() {
     server.send(200, "text/plain", "Battery DC Supply (GPIO 19) OFF");
   });
 
-  // RELAY 5: BATTERY CHARGER (GPIO 21)
+  // RELAY 5: BATTERY CHARGER (GPIO 27)
   server.on("/toggle-web/charger", HTTP_GET, []() {
     chargerState = !chargerState;
     lastServerCharger = chargerState;
     updateAllRelays();
-    webLog("Web Toggle: Battery Charger Relay (GPIO 21) is now " + String(chargerState ? "ON" : "OFF"));
-    server.send(200, "text/plain", "Battery Charger (GPIO 21) is " + String(chargerState ? "ON" : "OFF"));
+    webLog("Web Toggle: Battery Charger Relay (GPIO 27) is now " + String(chargerState ? "ON" : "OFF"));
+    server.send(200, "text/plain", "Battery Charger (GPIO 27) is " + String(chargerState ? "ON" : "OFF"));
   });
 
   server.on("/charger/on", HTTP_GET, []() {
     chargerState = true;
     lastServerCharger = true;
     updateAllRelays();
-    webLog("Direct Command: Battery Charger Relay (GPIO 21) set to ON");
-    server.send(200, "text/plain", "Battery Charger (GPIO 21) ON");
+    webLog("Direct Command: Battery Charger Relay (GPIO 27) set to ON");
+    server.send(200, "text/plain", "Battery Charger (GPIO 27) ON");
   });
 
   server.on("/charger/off", HTTP_GET, []() {
     chargerState = false;
     lastServerCharger = false;
     updateAllRelays();
-    webLog("Direct Command: Battery Charger Relay (GPIO 21) set to OFF");
-    server.send(200, "text/plain", "Battery Charger (GPIO 21) OFF");
+    webLog("Direct Command: Battery Charger Relay (GPIO 27) set to OFF");
+    server.send(200, "text/plain", "Battery Charger (GPIO 27) OFF");
   });
 
   server.on("/invert-relay", HTTP_GET, []() {
@@ -1193,15 +1320,20 @@ void loop() {
       http.begin(client, serverName);
       http.addHeader("Content-Type", "application/json");
 
-      // Read High-Precision INA226 Sensor Data (I2C 0x40)
+      // Read High-Precision INA226 Sensor Data (I2C SDA: GPIO 21, SCL: GPIO 22)
       INA226Data inaData = ina226.read();
       float dcCurrent = 0.0;
 
       if (inaData.valid) {
-        in_voltage = inaData.busVoltage;
+        // Use INA226 bus voltage if VBUS is connected (> 0.5V), otherwise use DC voltage divider
+        if (inaData.busVoltage > 0.5) {
+          in_voltage = inaData.busVoltage;
+        } else {
+          in_voltage = readDCVoltageSensor();
+        }
         dcCurrent = abs(inaData.current);
       } else {
-        // Fallback to analog DC voltage divider and ACS712 sensor
+        // Fallback to analog DC voltage divider and ACS712 sensor when INA226 is offline
         in_voltage = readDCVoltageSensor();
         dcCurrent = readDCCurrentACS712(ACS712_PIN);
       }
@@ -1315,7 +1447,7 @@ void loop() {
                 chargerState = sChg;
                 lastServerCharger = sChg;
                 setRelayState(RELAY_CHARGER, chargerState);
-                String msg = "\n*******************************************************\n⚡ [APP COMMAND EXECUTED] Charger Relay -> " + String(chargerState ? "CONNECTED / ON (GPIO 21)" : "DISCONNECTED / OFF (GPIO 21)") + "\n*******************************************************\n";
+                String msg = "\n*******************************************************\n⚡ [APP COMMAND EXECUTED] Charger Relay -> " + String(chargerState ? "CONNECTED / ON (GPIO 27)" : "DISCONNECTED / OFF (GPIO 27)") + "\n*******************************************************\n";
                 webLog(msg);
               }
             }

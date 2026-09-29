@@ -105,9 +105,9 @@ export default function OverviewTab({
         />
         <SummaryCard
           label="DC Current (INA226 / ACS712)"
-          value={`${(ina226Online ? ina226Current : systemDcCurrent).toFixed(2)} A DC`}
-          subtitle={ina226Online ? `Shunt: ${ina226ShuntVoltage.toFixed(2)} mV` : 'ACS712 Sensor Fallback'}
-          subtitleColor="#F59E0B"
+          value={`${(ina226Online ? ina226Current : (Math.abs(systemDcCurrent - 25.0) < 0.05 ? 0.0 : systemDcCurrent)).toFixed(2)} A DC`}
+          subtitle={ina226Online ? `Shunt: ${ina226ShuntVoltage.toFixed(2)} mV` : (systemDcCurrent === 0 ? 'DC Line Idle (0.00 A)' : 'ACS712 Sensor Fallback')}
+          subtitleColor={ina226Online ? '#10B981' : '#F59E0B'}
         />
         <SummaryCard
           label="AC Voltage (ZMPT101B)"

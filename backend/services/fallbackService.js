@@ -115,7 +115,9 @@ function setLatestSensorData(data) {
     battery: data.battery === undefined ? latestSensorData.battery : Number(data.battery),
     inputVoltage: data.inputVoltage === undefined ? latestSensorData.inputVoltage : Number(data.inputVoltage),
     dcVoltage: data.dcVoltage !== undefined ? Number(data.dcVoltage) : (latestSensorData.dcVoltage || defaultDcV),
-    dcCurrent: data.dcCurrent !== undefined ? Number(data.dcCurrent) : (latestSensorData.dcCurrent || 0),
+    dcCurrent: (data.dcCurrent !== undefined && Math.abs(Number(data.dcCurrent) - 25.0) < 0.05 && !data.ina226Online)
+      ? 0
+      : (data.dcCurrent !== undefined ? Number(data.dcCurrent) : (latestSensorData.dcCurrent || 0)),
     current: totalC,
     current1: c1,
     current2: c2,

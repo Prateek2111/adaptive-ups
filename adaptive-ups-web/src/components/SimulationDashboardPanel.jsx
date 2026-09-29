@@ -305,23 +305,21 @@ export default function SimulationDashboardPanel({ addLog }) {
           <div className="flex items-center gap-2">
             {/* System Status Warning Badge */}
             <span
-              className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                sim.systemWarning.includes('CRITICAL')
+              className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${sim.systemWarning.includes('CRITICAL')
                   ? 'bg-red-500/20 text-red-500 border border-red-500/50 animate-pulse'
                   : sim.systemWarning.includes('WARNING')
-                  ? 'bg-amber-500/20 text-amber-500 border border-amber-500/50'
-                  : 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/40'
-              }`}
+                    ? 'bg-amber-500/20 text-amber-500 border border-amber-500/50'
+                    : 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/40'
+                }`}
             >
               {sim.systemWarning}
             </span>
 
             <span
-              className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                isSimMode
+              className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${isSimMode
                   ? 'bg-blue-500/15 text-blue-500 border border-blue-500/40'
                   : 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/40'
-              }`}
+                }`}
             >
               {isSimMode ? 'SIMULATION MODE' : 'REAL BATTERY'}
             </span>
@@ -329,27 +327,25 @@ export default function SimulationDashboardPanel({ addLog }) {
         </div>
 
         {/* Source Toggle Buttons */}
-        <div className="grid grid-cols-2 gap-2.5 mb-3">
-          <button
+        <div className="grid grid-cols-1 gap-2.5 mb-3">
+          {/* <button
             onClick={() => handleSourceChange('REAL')}
             disabled={loading}
-            className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer flex items-center justify-center gap-2 border ${
-              !isSimMode
+            className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer flex items-center justify-center gap-2 border ${!isSimMode
                 ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
                 : 'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-[var(--text-main)]'
-            }`}
+              }`}
           >
             <Battery className="w-4 h-4" />
             <span>REAL HARDWARE MODE</span>
-          </button>
+          </button> */}
           <button
             onClick={() => handleSourceChange('SIMULATION')}
             disabled={loading}
-            className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer flex items-center justify-center gap-2 border ${
-              isSimMode
+            className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer flex items-center justify-center gap-2 border ${isSimMode
                 ? 'bg-blue-600 text-white border-blue-600 shadow-md'
                 : 'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-[var(--text-main)]'
-            }`}
+              }`}
           >
             <Sliders className="w-4 h-4" />
             <span>SIMULATION MODE</span>
@@ -376,7 +372,7 @@ export default function SimulationDashboardPanel({ addLog }) {
           </h3>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           <button
             onClick={() => handleTriggerScenario('batteryDrain')}
             disabled={loading}
@@ -419,7 +415,7 @@ export default function SimulationDashboardPanel({ addLog }) {
             </span>
           </button>
 
-          <button
+          {/* <button
             onClick={() => handleTriggerScenario('recovery')}
             disabled={loading}
             className="p-3 rounded-xl bg-[var(--bg-main)] hover:bg-emerald-500/10 border border-[var(--border-color)] hover:border-emerald-500/50 transition cursor-pointer text-left flex flex-col gap-1"
@@ -431,7 +427,7 @@ export default function SimulationDashboardPanel({ addLog }) {
             <span className="text-[11px] font-semibold text-[var(--text-muted)]">
               Temp: 65°C → 30°C (Cooling)
             </span>
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -481,9 +477,8 @@ export default function SimulationDashboardPanel({ addLog }) {
             <span className="text-xs font-bold text-[var(--text-main)]">
               🎛️ INA226 Sensor Readout:
             </span>
-            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-              sim.ina226Online ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'
-            }`}>
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${sim.ina226Online ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'
+              }`}>
               {sim.ina226Online ? '● ONLINE' : '⚠️ ANALOG FALLBACK'}
             </span>
           </div>
@@ -507,11 +502,10 @@ export default function SimulationDashboardPanel({ addLog }) {
                 <button
                   key={sp}
                   onClick={() => handleSetSpeed(sp)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer border ${
-                    active
+                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer border ${active
                       ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                       : 'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-[var(--text-main)]'
-                  }`}
+                    }`}
                 >
                   {sp}x
                 </button>
@@ -564,22 +558,20 @@ export default function SimulationDashboardPanel({ addLog }) {
         <div className="grid grid-cols-2 gap-2 mb-4">
           <button
             onClick={() => handleSetTempMode('HEATING', 65)}
-            className={`py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 border ${
-              sim.tempMode === 'HEATING'
+            className={`py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 border ${sim.tempMode === 'HEATING'
                 ? 'bg-orange-600 text-white border-orange-600 shadow-md'
                 : 'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-orange-500'
-            }`}
+              }`}
           >
             <Flame className="w-4 h-4" />
             <span>[ 🔥 HEATING ]</span>
           </button>
           <button
             onClick={() => handleSetTempMode('COOLING', 30)}
-            className={`py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 border ${
-              sim.tempMode === 'COOLING'
+            className={`py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 border ${sim.tempMode === 'COOLING'
                 ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
                 : 'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-emerald-500'
-            }`}
+              }`}
           >
             <Snowflake className="w-4 h-4" />
             <span>[ ❄️ COOLING ]</span>
@@ -604,11 +596,10 @@ export default function SimulationDashboardPanel({ addLog }) {
                 <button
                   key={prof.id}
                   onClick={() => handleSetTempProfile(prof.id)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
-                    active
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${active
                       ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
                       : 'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-[var(--text-main)]'
-                  }`}
+                    }`}
                 >
                   {prof.label}
                 </button>
@@ -629,11 +620,10 @@ export default function SimulationDashboardPanel({ addLog }) {
                 <button
                   key={sp}
                   onClick={() => handleSetTempSpeed(sp)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer border ${
-                    active
+                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer border ${active
                       ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
                       : 'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-[var(--text-main)]'
-                  }`}
+                    }`}
                 >
                   {sp}x
                 </button>
@@ -685,7 +675,7 @@ export default function SimulationDashboardPanel({ addLog }) {
       </div>
 
       {/* 6. COMBINED ADAPTIVE LOAD SHEDDING & PRIORITY / THERMAL SENSITIVITY TABLE */}
-      <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm">
+      {/* <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-amber-500" />
@@ -704,9 +694,8 @@ export default function SimulationDashboardPanel({ addLog }) {
             return (
               <div
                 key={load.id}
-                className={`p-4 rounded-xl bg-[var(--bg-main)] border transition ${
-                  isOn ? 'border-emerald-500/40' : 'border-red-500/40 bg-red-500/5'
-                }`}
+                className={`p-4 rounded-xl bg-[var(--bg-main)] border transition ${isOn ? 'border-emerald-500/40' : 'border-red-500/40 bg-red-500/5'
+                  }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -726,7 +715,6 @@ export default function SimulationDashboardPanel({ addLog }) {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* Priority Selector */}
                     <div className="flex items-center gap-1">
                       <span className="text-[10px] font-bold text-[var(--text-muted)]">Priority:</span>
                       <select
@@ -741,7 +729,6 @@ export default function SimulationDashboardPanel({ addLog }) {
                       </select>
                     </div>
 
-                    {/* Thermal Sensitivity Selector */}
                     <div className="flex items-center gap-1">
                       <span className="text-[10px] font-bold text-[var(--text-muted)]">Thermal Sens:</span>
                       <select
@@ -756,16 +743,13 @@ export default function SimulationDashboardPanel({ addLog }) {
                     </div>
 
                     <span
-                      className={`px-2.5 py-1 rounded-lg text-xs font-black ${
-                        isOn ? 'bg-emerald-500/15 text-emerald-500' : 'bg-red-500/15 text-red-500'
-                      }`}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-black ${isOn ? 'bg-emerald-500/15 text-emerald-500' : 'bg-red-500/15 text-red-500'
+                        }`}
                     >
                       {isOn ? 'ON' : 'OFF'}
                     </span>
                   </div>
                 </div>
-
-                {/* Load Shed Reason */}
                 {!isOn && load.shedReason && (
                   <div className="mt-2.5 p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs font-semibold text-red-500 flex items-center gap-1.5">
                     <Info className="w-3.5 h-3.5 shrink-0" />
@@ -776,7 +760,7 @@ export default function SimulationDashboardPanel({ addLog }) {
             );
           })}
         </div>
-      </div>
+      </div> */}
 
       {/* 7. SIMULATION EVENT LOG */}
       <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm">
@@ -793,10 +777,10 @@ export default function SimulationDashboardPanel({ addLog }) {
                 log.type === 'crit'
                   ? 'text-red-500 font-bold'
                   : log.type === 'warn'
-                  ? 'text-orange-500 font-bold'
-                  : log.type === 'ok'
-                  ? 'text-emerald-500 font-bold'
-                  : 'text-[var(--text-main)]';
+                    ? 'text-orange-500 font-bold'
+                    : log.type === 'ok'
+                      ? 'text-emerald-500 font-bold'
+                      : 'text-[var(--text-main)]';
 
               return (
                 <div key={log.id || idx} className="flex gap-2">
