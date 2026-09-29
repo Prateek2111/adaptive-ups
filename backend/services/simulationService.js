@@ -87,7 +87,7 @@ let simulationState = {
   temperature: 28.5,
   tempTarget: 28.5,
   tempMode: "STABLE", // "HEATING", "COOLING", "STABLE"
-  tempSpeed: 1, // 1x, 5x, 10x, 25x, 50x
+  tempSpeed: 1, // 1x, 5x, 10x, 25x, 50x, 100x
   tempProfile: "NORMAL", // "NORMAL", "WARM", "HIGH", "OVERHEATING", "RECOVERY", "CUSTOM"
   tempStatus: "NORMAL", // "NORMAL", "WARNING", "HIGH", "CRITICAL"
   minTemp: 15.0,
@@ -471,7 +471,7 @@ function setSimulationSpeed(speed) {
 
 function setTempSpeed(speed) {
   const numericSpeed = Number(speed);
-  if ([1, 5, 10, 25, 50].includes(numericSpeed)) {
+  if ([1, 5, 10, 25, 50, 100].includes(numericSpeed)) {
     simulationState.tempSpeed = numericSpeed;
     addLog(`Temperature simulation speed changed to ${numericSpeed}x`, "info");
   }

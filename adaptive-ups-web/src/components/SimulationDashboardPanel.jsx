@@ -594,7 +594,7 @@ export default function SimulationDashboardPanel({ addLog }) {
             Temp Speed:
           </span>
           <div className="flex flex-wrap gap-1.5">
-            {[1, 5, 10, 25, 50].map((sp) => {
+            {[1, 5, 10, 25, 50, 100].map((sp) => {
               const active = sim.tempSpeed === sp;
               return (
                 <button
