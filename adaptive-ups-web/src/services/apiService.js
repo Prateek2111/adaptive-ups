@@ -40,14 +40,14 @@ class ApiService {
     const c1 = parseNum(data.current1, 0);
     const c2 = parseNum(data.current2, 0);
     const totalC = parseNum(data.current, c1 + c2);
-    const batt = parseNum(data.battery, 100);
-    const defaultDcV = 9.0 + (batt / 100.0) * 3.6;
+    const batt = parseNum(data.battery, 0);
+    const defaultDcV = batt > 0 ? 9.0 + (batt / 100.0) * 3.6 : 0.0;
     return {
       temperature: parseNum(data.temperature, 25),
       humidity: parseNum(data.humidity, 50),
       distance: parseNum(data.distance, 100),
       battery: batt,
-      inputVoltage: parseNum(data.inputVoltage, 220),
+      inputVoltage: parseNum(data.inputVoltage, 0),
       dcVoltage: parseNum(data.dcVoltage, defaultDcV),
       dcCurrent: Math.abs(parseNum(data.dcCurrent, 0) - 25.0) < 0.05 && data.ina226Online !== true ? 0 : parseNum(data.dcCurrent, 0),
       current: totalC,

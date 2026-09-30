@@ -59,12 +59,12 @@ export default function App() {
   const [battSupplyOn, setBattSupplyOn] = useState(true);
   const [chargerOn, setChargerOn] = useState(true);
 
-  const [systemTemp, setSystemTemp] = useState(28.5);
+  const [systemTemp, setSystemTemp] = useState(0.0);
   const [systemHum, setSystemHum] = useState(45);
   const [sysDist, setSysDist] = useState(12);
   const [systemBattery, setSystemBattery] = useState(78);
   const [systemVoltage, setSystemVoltage] = useState(224);
-  const [systemDcVoltage, setSystemDcVoltage] = useState(12.6);
+  const [systemDcVoltage, setSystemDcVoltage] = useState(0.0);
   const [systemDcCurrent, setSystemDcCurrent] = useState(0.0);
   const [systemCurrent, setSystemCurrent] = useState(0.45);
   const [systemCurrent1, setSystemCurrent1] = useState(0.25);
@@ -145,10 +145,11 @@ export default function App() {
       setSystemVoltage(sensor.inputVoltage);
       const calculatedDcV =
         sensor.dcVoltage !== undefined && sensor.dcVoltage !== null
-          ? sensor.dcVoltage
-          : sensor.battery !== undefined
-          ? 9.0 + (sensor.battery / 100.0) * 3.6
-          : 12.6;
+          ? Number(sensor.dcVoltage)
+          : sensor.battery !== undefined && Number(sensor.battery) > 0
+          ? 9.0 + (Number(sensor.battery) / 100.0) * 3.6
+          : 0.0;
+      setSystemDcVoltage(calculatedDcV);
       let dynamicDcCurrent =
         sensor.dcCurrent !== undefined && sensor.dcCurrent !== null
           ? Number(sensor.dcCurrent)
@@ -161,7 +162,7 @@ export default function App() {
       setSystemCurrent(sensor.current);
       setSystemCurrent1(sensor.current1 || 0);
       setSystemCurrent2(sensor.current2 || 0);
-      setIna226BusVoltage(sensor.ina226BusVoltage !== undefined ? sensor.ina226BusVoltage : calculatedDcV);
+      setIna226BusVoltage(sensor.ina226BusVoltage !== undefined ? Number(sensor.ina226BusVoltage) : calculatedDcV);
       setIna226ShuntVoltage(sensor.ina226ShuntVoltage || 0.0);
       setIna226Current(sensor.ina226Current !== undefined ? sensor.ina226Current : dynamicDcCurrent);
       setIna226Power(sensor.ina226Power || 0.0);

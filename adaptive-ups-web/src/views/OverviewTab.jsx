@@ -5,7 +5,7 @@ import SummaryCard from '../components/SummaryCard';
 export default function OverviewTab({
   onUtility,
   systemVoltage,
-  systemDcVoltage = 12.6,
+  systemDcVoltage = 0.0,
   systemDcCurrent = 0,
   systemCurrent,
   systemCurrent1 = 0,
@@ -20,7 +20,7 @@ export default function OverviewTab({
   priority,
   battSupplyOn = true,
   chargerOn = true,
-  ina226BusVoltage = 12.6,
+  ina226BusVoltage = 0.0,
   ina226ShuntVoltage = 0,
   ina226Current = 0,
   ina226Power = 0,
@@ -248,7 +248,7 @@ export default function OverviewTab({
         </div>
 
         {/* Multi-Sensor Grid Comparison Box */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 p-4 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)]">
           <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-[var(--bg-card)] border border-emerald-500/30">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-emerald-500">
@@ -316,10 +316,31 @@ export default function OverviewTab({
               Power: {((systemVoltage > 90 ? systemVoltage : 12.0) * c2Val).toFixed(1)} W
             </span>
           </div>
+
+          <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-[var(--bg-card)] border border-rose-500/30">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-rose-500">
+                🌡️ DS18B20 Temp
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-rose-500/15 text-rose-500">
+                GPIO 4
+              </span>
+            </div>
+            <span className="text-xl font-extrabold text-[var(--text-main)]">
+              {systemTemp > 0 ? `${systemTemp.toFixed(1)} °C` : '0.0 °C'}
+            </span>
+            <span className="text-[11px] text-[var(--text-muted)] font-medium">
+              {tempLabel} • {systemTemp > 0 ? `${((systemTemp * 9) / 5 + 32).toFixed(1)}°F` : 'Disconnected'}
+            </span>
+          </div>
         </div>
 
         <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-3.5 font-medium leading-relaxed">
-          INA226 Power:{' '}
+          DS18B20 Temp:{' '}
+          <strong className="text-[var(--text-main)]">
+            {systemTemp.toFixed(1)}°C
+          </strong>{' '}
+          | INA226 Power:{' '}
           <strong className="text-[var(--text-main)]">
             {ina226Power.toFixed(1)}W ({ina226BusVoltage.toFixed(2)}V / {ina226Current.toFixed(2)}A)
           </strong>{' '}
